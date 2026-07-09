@@ -4,6 +4,7 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const db = require('./db');
+const { requireVerifiedPhone } = require('./firebaseAuth');
 
 const appId = process.env.AGORA_APP_ID;
 const appCertificate = process.env.AGORA_APP_CERTIFICATE;
@@ -15,6 +16,10 @@ if (!appId || !appCertificate) {
 }
 if (!process.env.DATABASE_URL) {
   console.error('Falta DATABASE_URL en .env');
+  process.exit(1);
+}
+if (!process.env.FIREBASE_PROJECT_ID) {
+  console.error('Falta FIREBASE_PROJECT_ID en .env');
   process.exit(1);
 }
 
@@ -66,13 +71,11 @@ function memberResponse(family, member) {
   };
 }
 
-app.post('/families', createFamilyLimiter, async (req, res) => {
-  const { name, role, deviceId, displayName } = req.body || {};
+app.post('/families', createFamilyLimiter, requireVerifiedPhone, async (req, res) => {
+  const { name, role, displayName } = req.body || {};
+  const deviceId = req.verifiedPhone;
   if (!role || !VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: 'role inválido, debe ser ABUELA o CUIDADOR' });
-  }
-  if (!deviceId) {
-    return res.status(400).json({ error: 'Falta deviceId' });
   }
   try {
     const family = await db.createFamily({ name });
@@ -84,13 +87,11 @@ app.post('/families', createFamilyLimiter, async (req, res) => {
   }
 });
 
-app.post('/families/:inviteCode/join', joinFamilyLimiter, async (req, res) => {
-  const { role, deviceId, displayName } = req.body || {};
+app.post('/families/:inviteCode/join', joinFamilyLimiter, requireVerifiedPhone, async (req, res) => {
+  const { role, displayName } = req.body || {};
+  const deviceId = req.verifiedPhone;
   if (!role || !VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: 'role inválido, debe ser ABUELA o CUIDADOR' });
-  }
-  if (!deviceId) {
-    return res.status(400).json({ error: 'Falta deviceId' });
   }
   try {
     const family = await db.getFamilyByInviteCode(req.params.inviteCode);
@@ -156,12 +157,12 @@ const TOKEN_TTL_SECONDS = 24 * 60 * 60;
 // a partir de una membresía real (familyId + deviceId) ya registrada en la
 // base de datos. Así nadie puede pedir un token para el canal de otra familia
 // solo adivinando el nombre (los canales son "family_1", "family_2", ...).
-app.get('/token', tokenLimiter, async (req, res) => {
+app.get('/token', tokenLimiter, requireVerifiedPhone, async (req, res) => {
   const familyId = Number(req.query.familyId);
-  const deviceId = req.query.deviceId;
+  const deviceId = req.verifiedPhone;
 
-  if (!familyId || !deviceId) {
-    return res.status(400).json({ error: 'Faltan los parametros familyId y deviceId' });
+  if (!familyId) {
+    return res.status(400).json({ error: 'Falta el parametro familyId' });
   }
 
   try {
