@@ -208,3 +208,4 @@ db.initSchema()
     console.error('No se pudo inicializar la base de datos:', e.message);
     process.exit(1);
   });
+
