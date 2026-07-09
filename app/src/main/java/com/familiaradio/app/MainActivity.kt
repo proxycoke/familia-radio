@@ -171,6 +171,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FamiliaRadioApp(
+                deviceId = { MembershipStore.getOrCreateDeviceId(applicationContext) },
                 loadMembership = { MembershipStore.load(applicationContext) },
                 saveMembership = { membership ->
                     MembershipStore.save(applicationContext, membership)
@@ -338,6 +339,7 @@ private enum class Role { ABUELA, CUIDADOR }
 
 @Composable
 private fun FamiliaRadioApp(
+    deviceId: () -> String,
     loadMembership: () -> Membership?,
     saveMembership: (Membership) -> Unit,
     forgetMembership: () -> Unit,
@@ -397,7 +399,7 @@ private fun FamiliaRadioApp(
                     if (manager == null) return@LaunchedEffect
                     statusMessage = "Conectando..."
                     if (hasMicPermission()) {
-                        manager.connect(currentMembership.channelName, currentMembership.agoraUid, {
+                        manager.connect(currentMembership.familyId, deviceId(), {
                             connected = true
                             statusMessage = ""
                             if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
@@ -405,7 +407,7 @@ private fun FamiliaRadioApp(
                     } else {
                         requestMicPermission { granted ->
                             if (granted) {
-                                manager.connect(currentMembership.channelName, currentMembership.agoraUid, {
+                                manager.connect(currentMembership.familyId, deviceId(), {
                                     connected = true
                                     statusMessage = ""
                                     if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
