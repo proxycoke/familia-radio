@@ -1,6 +1,7 @@
 require('dotenv').config({ quiet: true });
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const { RtcTokenBuilder, RtcRole } = require('agora-token');
 const db = require('./db');
 
@@ -27,6 +28,34 @@ app.use((req, _res, next) => {
   next();
 });
 
+// Frena creación masiva de familias desde una misma IP.
+const createFamilyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos, probá de nuevo en un rato' }
+});
+
+// Frena fuerza bruta de códigos de invitación (6 caracteres, ~1.4 mil millones de combinaciones,
+// pero sin límite alguien podría automatizar la búsqueda).
+const joinFamilyLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos, probá de nuevo en un rato' }
+});
+
+// Más permisivo: la app reintenta sola cada 5s si se corta la conexión.
+const tokenLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos, probá de nuevo en un rato' }
+});
+
 function memberResponse(family, member) {
   return {
     familyId: family.id,
@@ -37,7 +66,7 @@ function memberResponse(family, member) {
   };
 }
 
-app.post('/families', async (req, res) => {
+app.post('/families', createFamilyLimiter, async (req, res) => {
   const { name, role, deviceId, displayName } = req.body || {};
   if (!role || !VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: 'role inválido, debe ser ABUELA o CUIDADOR' });
@@ -55,7 +84,7 @@ app.post('/families', async (req, res) => {
   }
 });
 
-app.post('/families/:inviteCode/join', async (req, res) => {
+app.post('/families/:inviteCode/join', joinFamilyLimiter, async (req, res) => {
   const { role, deviceId, displayName } = req.body || {};
   if (!role || !VALID_ROLES.includes(role)) {
     return res.status(400).json({ error: 'role inválido, debe ser ABUELA o CUIDADOR' });
@@ -123,28 +152,48 @@ app.get('/families/:inviteCode', async (req, res) => {
 
 const TOKEN_TTL_SECONDS = 24 * 60 * 60;
 
-app.get('/token', (req, res) => {
-  const channelName = req.query.channel;
-  const uid = Number(req.query.uid || 0);
+// El canal y el UID NUNCA se toman de lo que manda el celular: se derivan acá
+// a partir de una membresía real (familyId + deviceId) ya registrada en la
+// base de datos. Así nadie puede pedir un token para el canal de otra familia
+// solo adivinando el nombre (los canales son "family_1", "family_2", ...).
+app.get('/token', tokenLimiter, async (req, res) => {
+  const familyId = Number(req.query.familyId);
+  const deviceId = req.query.deviceId;
 
-  if (!channelName) {
-    return res.status(400).json({ error: 'Falta el parametro channel' });
+  if (!familyId || !deviceId) {
+    return res.status(400).json({ error: 'Faltan los parametros familyId y deviceId' });
   }
 
-  const now = Math.floor(Date.now() / 1000);
-  const expireAt = now + TOKEN_TTL_SECONDS;
+  try {
+    const family = await db.getFamilyById(familyId);
+    if (!family) {
+      return res.status(404).json({ error: 'Familia no encontrada' });
+    }
+    const member = await db.findExistingMember(familyId, deviceId);
+    if (!member) {
+      return res.status(403).json({ error: 'Este dispositivo no es miembro de esta familia' });
+    }
 
-  const token = RtcTokenBuilder.buildTokenWithUid(
-    appId,
-    appCertificate,
-    channelName,
-    uid,
-    RtcRole.PUBLISHER,
-    expireAt,
-    expireAt
-  );
+    const channelName = db.channelNameForFamily(familyId);
+    const uid = member.id;
+    const now = Math.floor(Date.now() / 1000);
+    const expireAt = now + TOKEN_TTL_SECONDS;
 
-  res.json({ appId, channelName, uid, token, expireAt });
+    const token = RtcTokenBuilder.buildTokenWithUid(
+      appId,
+      appCertificate,
+      channelName,
+      uid,
+      RtcRole.PUBLISHER,
+      expireAt,
+      expireAt
+    );
+
+    res.json({ appId, channelName, uid, token, expireAt });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'No se pudo generar el token' });
+  }
 });
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
