@@ -22,7 +22,8 @@ async function requireVerifiedPhone(req, res, next) {
     req.verifiedPhone = decoded.phone_number;
     next();
   } catch (e) {
-    res.status(401).json({ error: 'Token de autenticación inválido o expirado' });
+    console.error('Fallo al verificar el ID token:', e.message);
+    res.status(401).json({ error: `Token inválido: ${e.message}` });
   }
 }
 
