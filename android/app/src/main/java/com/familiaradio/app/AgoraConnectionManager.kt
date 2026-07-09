@@ -71,7 +71,7 @@ class AgoraConnectionManager(private val context: Context) {
                 val body = stream?.bufferedReader()?.readText() ?: ""
                 mainHandler.post { onResult(code, body) }
             } catch (e: Exception) {
-                mainHandler.post { onError("No se pudo contactar al servidor: ${e.message}") }
+                mainHandler.post { onError(context.getString(R.string.error_contacting_server, e.message)) }
             }
         }.start()
     }
@@ -84,7 +84,7 @@ class AgoraConnectionManager(private val context: Context) {
     ) {
         httpGet("/token?familyId=$familyId&deviceId=$deviceId", onResult = { code, responseBody ->
             if (code != 200) {
-                onError("El servidor de tokens respondió $code")
+                onError(context.getString(R.string.error_token_server_status, code))
                 return@httpGet
             }
             val json = JSONObject(responseBody)
@@ -131,7 +131,7 @@ class AgoraConnectionManager(private val context: Context) {
                     }
                 }
                 override fun onError(err: Int) {
-                    mainHandler.post { onError("Error de conexión Agora (código $err)") }
+                    mainHandler.post { onError(context.getString(R.string.error_agora_connection, err)) }
                 }
                 override fun onConnectionStateChanged(state: Int, reason: Int) {
                     val lostConnection = state == Constants.CONNECTION_STATE_FAILED ||
@@ -172,7 +172,7 @@ class AgoraConnectionManager(private val context: Context) {
             engine.joinChannel(token, channelName, uid, options)
             rtcEngine = engine
         } catch (e: Exception) {
-            onError("No se pudo iniciar Agora: ${e.message}")
+            onError(context.getString(R.string.error_agora_start, e.message))
         }
     }
 

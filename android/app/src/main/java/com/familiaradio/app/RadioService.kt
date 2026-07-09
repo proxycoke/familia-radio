@@ -40,10 +40,10 @@ class RadioService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Familia Radio",
+            getString(R.string.app_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Mantiene el radio familiar conectado en segundo plano"
+            description = getString(R.string.notification_channel_description)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
@@ -55,8 +55,8 @@ class RadioService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("Familia Radio activo")
-            .setContentText("Escuchando al radio familiar")
+            .setContentTitle(getString(R.string.notification_title_active))
+            .setContentText(getString(R.string.notification_text_listening))
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pendingIntent)
             .setOngoing(true)

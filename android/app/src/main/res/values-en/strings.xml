@@ -1,0 +1,57 @@
+<resources>
+    <string name="app_name">Familia Radio</string>
+
+    <!-- Role selection / initial setup -->
+    <string name="setup_welcome_title">Welcome to Familia Radio</string>
+    <string name="setup_create_family_button">Create a new family</string>
+    <string name="setup_join_family_button">Join with a code</string>
+    <string name="setup_choose_role_title">What will your role be?</string>
+    <string name="role_elder_title">I\'m the elder family member</string>
+    <string name="role_elder_subtitle">Simple screen with a single button</string>
+    <string name="role_caregiver_title">I\'m the caregiver</string>
+    <string name="role_caregiver_subtitle">Panel to talk and keep an eye out</string>
+    <string name="family_created_title">Family created</string>
+    <string name="family_created_subtitle">Share this code with the rest of the family so they can join</string>
+    <string name="action_continue">Continue</string>
+    <string name="join_code_prompt">Enter your family\'s code</string>
+    <string name="invite_code_label">Invitation code</string>
+    <string name="action_next">Next</string>
+    <string name="action_copy_code">Copy code</string>
+    <string name="clip_label_family_code">Family code</string>
+
+    <!-- Connection state -->
+    <string name="status_disconnected">Disconnected</string>
+    <string name="role_label_elder">Elder family member</string>
+    <string name="role_label_caregiver">Caregiver</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_change_family">Change family</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connecting_radio">Connecting to the family radio…</string>
+    <string name="action_retry">Retry</string>
+    <string name="status_reconnecting">🔄 Reconnecting…</string>
+    <string name="ptt_hint_elder">Press and hold to talk</string>
+    <string name="ptt_hint_caregiver">Radio connected</string>
+    <string name="ptt_talking">Talking…</string>
+    <string name="ptt_hold_hint">Press and\nhold</string>
+    <string name="action_exit">Exit</string>
+
+    <!-- Errors -->
+    <string name="error_mic_permission_required">Microphone permission is needed to use the radio</string>
+    <string name="error_contacting_server">Could not reach the server: %1$s</string>
+    <string name="error_create_family">Could not create the family (%1$d)</string>
+    <string name="error_family_not_found">We couldn\'t find a family with that code</string>
+    <string name="error_role_full">That role is already full in this family</string>
+    <string name="error_join_family">Could not join the family (%1$d)</string>
+    <string name="error_token_server_status">The token server responded %1$d</string>
+    <string name="error_agora_connection">Agora connection error (code %1$d)</string>
+    <string name="error_agora_start">Could not start Agora: %1$s</string>
+
+    <!-- Background service notification -->
+    <string name="notification_channel_description">Keeps the family radio connected in the background</string>
+    <string name="notification_title_active">Familia Radio active</string>
+    <string name="notification_text_listening">Listening to the family radio</string>
+
+    <!-- Language selector -->
+    <string name="language_spanish">Español</string>
+    <string name="language_english">English</string>
+</resources>

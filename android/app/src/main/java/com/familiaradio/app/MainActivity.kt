@@ -26,12 +26,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -247,7 +250,7 @@ class MainActivity : ComponentActivity() {
                 val body = stream?.bufferedReader()?.readText() ?: ""
                 runOnUiThread { onResult(code, body) }
             } catch (e: Exception) {
-                runOnUiThread { onError("No se pudo contactar al servidor: ${e.message}") }
+                runOnUiThread { onError(getString(R.string.error_contacting_server, e.message)) }
             }
         }.start()
     }
@@ -273,7 +276,7 @@ class MainActivity : ComponentActivity() {
                 val responseBody = stream?.bufferedReader()?.readText() ?: ""
                 runOnUiThread { onResult(code, responseBody) }
             } catch (e: Exception) {
-                runOnUiThread { onError("No se pudo contactar al servidor: ${e.message}") }
+                runOnUiThread { onError(getString(R.string.error_contacting_server, e.message)) }
             }
         }.start()
     }
@@ -296,7 +299,7 @@ class MainActivity : ComponentActivity() {
             if (code == 201) {
                 onResult(parseMembership(JSONObject(responseBody)))
             } else {
-                onError(errorMessageFrom(responseBody, "No se pudo crear la familia ($code)"))
+                onError(errorMessageFrom(responseBody, getString(R.string.error_create_family, code)))
             }
         }, onError = onError)
     }
@@ -315,9 +318,9 @@ class MainActivity : ComponentActivity() {
         httpPostJson("/families/${inviteCode.trim().uppercase()}/join", body, onResult = { code, responseBody ->
             when (code) {
                 201, 200 -> onResult(parseMembership(JSONObject(responseBody)))
-                404 -> onError("No encontramos ninguna familia con ese código")
-                409 -> onError(errorMessageFrom(responseBody, "Ese rol ya está completo en esta familia"))
-                else -> onError(errorMessageFrom(responseBody, "No se pudo unir a la familia ($code)"))
+                404 -> onError(getString(R.string.error_family_not_found))
+                409 -> onError(errorMessageFrom(responseBody, getString(R.string.error_role_full)))
+                else -> onError(errorMessageFrom(responseBody, getString(R.string.error_join_family, code)))
             }
         }, onError = onError)
     }
@@ -393,11 +396,13 @@ private fun FamiliaRadioApp(
             }
 
             val manager = connectionManager.value
+            val connectingLabel = stringResource(R.string.status_connecting)
+            val micPermissionError = stringResource(R.string.error_mic_permission_required)
 
             if (!connected) {
                 LaunchedEffect(retryCount, manager) {
                     if (manager == null) return@LaunchedEffect
-                    statusMessage = "Conectando..."
+                    statusMessage = connectingLabel
                     if (hasMicPermission()) {
                         manager.connect(currentMembership.familyId, deviceId(), {
                             connected = true
@@ -413,7 +418,7 @@ private fun FamiliaRadioApp(
                                     if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
                                 }, { error -> statusMessage = error })
                             } else {
-                                statusMessage = "Se necesita permiso de micrófono para usar el radio"
+                                statusMessage = micPermissionError
                             }
                         }
                     }
@@ -461,10 +466,12 @@ private fun FamilySetupScreen(
     ) {
         when (step) {
             SetupStep.CHOOSE -> {
+                LanguageToggle()
+                Spacer(modifier = Modifier.height(8.dp))
                 Text("📻", fontSize = 56.sp)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    "Bienvenido a Familia Radio",
+                    stringResource(R.string.setup_welcome_title),
                     fontSize = 26.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -475,22 +482,22 @@ private fun FamilySetupScreen(
                     onClick = { errorMessage = ""; step = SetupStep.CREATE_ROLE },
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth().height(72.dp)
-                ) { Text("Crear una familia nueva", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.setup_create_family_button), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
                 Spacer(modifier = Modifier.height(16.dp))
                 OutlinedButton(
                     onClick = { errorMessage = ""; step = SetupStep.JOIN_CODE },
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth().height(72.dp)
-                ) { Text("Unirme con un código", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.setup_join_family_button), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
             }
 
             SetupStep.CREATE_ROLE -> {
-                Text("¿Cuál va a ser tu rol?", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.setup_choose_role_title), fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(32.dp))
                 RoleCard(
                     emoji = "👵",
-                    title = "Soy el familiar mayor",
-                    subtitle = "Pantalla simple con un solo botón",
+                    title = stringResource(R.string.role_elder_title),
+                    subtitle = stringResource(R.string.role_elder_subtitle),
                     containerColor = AbuelaColors.primary,
                     enabled = !loading,
                     onClick = {
@@ -501,8 +508,8 @@ private fun FamilySetupScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 RoleCard(
                     emoji = "🧑‍💼",
-                    title = "Soy el cuidador",
-                    subtitle = "Panel para hablar y estar pendiente",
+                    title = stringResource(R.string.role_caregiver_title),
+                    subtitle = stringResource(R.string.role_caregiver_subtitle),
                     containerColor = CuidadorColors.primary,
                     enabled = !loading,
                     onClick = {
@@ -517,10 +524,10 @@ private fun FamilySetupScreen(
                 val membership = pendingMembership
                 Text("✅", fontSize = 48.sp)
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Familia creada", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.family_created_title), fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "Compartí este código con el resto de la familia para que se unan",
+                    stringResource(R.string.family_created_subtitle),
                     fontSize = 15.sp,
                     textAlign = TextAlign.Center
                 )
@@ -531,16 +538,16 @@ private fun FamilySetupScreen(
                     onClick = { membership?.let(onRegistered) },
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth().height(64.dp)
-                ) { Text("Continuar", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.action_continue), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
             }
 
             SetupStep.JOIN_CODE -> {
-                Text("Ingresá el código de tu familia", fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                Text(stringResource(R.string.join_code_prompt), fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(24.dp))
                 OutlinedTextField(
                     value = codeInput,
                     onValueChange = { codeInput = it.uppercase().take(6) },
-                    label = { Text("Código de invitación") },
+                    label = { Text(stringResource(R.string.invite_code_label)) },
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -550,16 +557,16 @@ private fun FamilySetupScreen(
                     enabled = codeInput.length >= 4,
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth().height(64.dp)
-                ) { Text("Siguiente", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                ) { Text(stringResource(R.string.action_next), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
             }
 
             SetupStep.JOIN_ROLE -> {
-                Text("¿Cuál va a ser tu rol?", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.setup_choose_role_title), fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(32.dp))
                 RoleCard(
                     emoji = "👵",
-                    title = "Soy el familiar mayor",
-                    subtitle = "Pantalla simple con un solo botón",
+                    title = stringResource(R.string.role_elder_title),
+                    subtitle = stringResource(R.string.role_elder_subtitle),
                     containerColor = AbuelaColors.primary,
                     enabled = !loading,
                     onClick = {
@@ -570,8 +577,8 @@ private fun FamilySetupScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 RoleCard(
                     emoji = "🧑‍💼",
-                    title = "Soy el cuidador",
-                    subtitle = "Panel para hablar y estar pendiente",
+                    title = stringResource(R.string.role_caregiver_title),
+                    subtitle = stringResource(R.string.role_caregiver_subtitle),
                     containerColor = CuidadorColors.primary,
                     enabled = !loading,
                     onClick = {
@@ -600,6 +607,7 @@ private fun SetupStatus(loading: Boolean, errorMessage: String) {
 @Composable
 private fun InviteCodeBadge(code: String) {
     val context = LocalContext.current
+    val clipLabel = stringResource(R.string.clip_label_family_code)
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
@@ -618,8 +626,8 @@ private fun InviteCodeBadge(code: String) {
             Spacer(modifier = Modifier.height(12.dp))
             TextButton(onClick = {
                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("Código de familia", code))
-            }) { Text("Copiar código") }
+                clipboard.setPrimaryClip(ClipData.newPlainText(clipLabel, code))
+            }) { Text(stringResource(R.string.action_copy_code)) }
         }
     }
 }
@@ -635,12 +643,14 @@ private fun IdleScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        LanguageToggle()
+        Spacer(modifier = Modifier.height(8.dp))
         Text("📻", fontSize = 48.sp)
         Spacer(modifier = Modifier.height(16.dp))
-        Text("Desconectado", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.status_disconnected), fontSize = 24.sp, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            if (role == Role.ABUELA) "Familiar mayor" else "Cuidador",
+            if (role == Role.ABUELA) stringResource(R.string.role_label_elder) else stringResource(R.string.role_label_caregiver),
             fontSize = 14.sp,
             color = MaterialTheme.colorScheme.primary
         )
@@ -649,9 +659,34 @@ private fun IdleScreen(
             onClick = onConnect,
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth().height(64.dp)
-        ) { Text("Conectar", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+        ) { Text(stringResource(R.string.action_connect), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         Spacer(modifier = Modifier.height(24.dp))
-        TextButton(onClick = onForgetFamily) { Text("Cambiar de familia") }
+        TextButton(onClick = onForgetFamily) { Text(stringResource(R.string.action_change_family)) }
+    }
+}
+
+@Composable
+private fun LanguageToggle() {
+    val context = LocalContext.current
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        TextButton(onClick = { setAppLanguage(context, "es") }) {
+            Text(stringResource(R.string.language_spanish), fontSize = 13.sp)
+        }
+        TextButton(onClick = { setAppLanguage(context, "en") }) {
+            Text(stringResource(R.string.language_english), fontSize = 13.sp)
+        }
+    }
+}
+
+// AppCompatDelegate.setApplicationLocales() depende de que la Activity extienda
+// AppCompatActivity para recrearse sola; como esta app usa ComponentActivity,
+// en Android 13+ llamamos directo al LocaleManager del sistema (no requiere eso).
+private fun setAppLanguage(context: Context, languageTag: String) {
+    if (Build.VERSION.SDK_INT >= 33) {
+        context.getSystemService(android.app.LocaleManager::class.java).applicationLocales =
+            android.os.LocaleList.forLanguageTags(languageTag)
+    } else {
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(languageTag))
     }
 }
 
@@ -692,7 +727,8 @@ private fun ConnectingScreen(
     statusMessage: String,
     onRetry: () -> Unit
 ) {
-    val isError = statusMessage.isNotBlank() && statusMessage != "Conectando..."
+    val connectingLabel = stringResource(R.string.status_connecting)
+    val isError = statusMessage.isNotBlank() && statusMessage != connectingLabel
     Column(
         modifier = Modifier.fillMaxSize().padding(28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -709,7 +745,7 @@ private fun ConnectingScreen(
         }
         Spacer(modifier = Modifier.height(28.dp))
         Text(
-            if (isError) statusMessage else "Conectando al radio familiar...",
+            if (isError) statusMessage else stringResource(R.string.status_connecting_radio),
             fontSize = if (role == Role.ABUELA) 24.sp else 20.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
@@ -720,7 +756,7 @@ private fun ConnectingScreen(
                 onClick = onRetry,
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth().height(64.dp)
-            ) { Text("Reintentar", fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+            ) { Text(stringResource(R.string.action_retry), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         }
     }
 }
@@ -751,7 +787,7 @@ private fun PushToTalkScreen(
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
             ) {
                 Text(
-                    "🔄 Reconectando...",
+                    stringResource(R.string.status_reconnecting),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error,
@@ -761,7 +797,7 @@ private fun PushToTalkScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
         Text(
-            if (isAbuela) "Mantené presionado para hablar" else "Radio conectado",
+            if (isAbuela) stringResource(R.string.ptt_hint_elder) else stringResource(R.string.ptt_hint_caregiver),
             fontSize = if (isAbuela) 26.sp else 22.sp,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
@@ -783,7 +819,7 @@ private fun PushToTalkScreen(
                 Text(if (isPressed) "🔊" else "🎙️", fontSize = 40.sp)
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    if (isPressed) "Hablando..." else "Mantené\npresionado",
+                    if (isPressed) stringResource(R.string.ptt_talking) else stringResource(R.string.ptt_hold_hint),
                     fontSize = if (isAbuela) 22.sp else 18.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center
@@ -792,7 +828,7 @@ private fun PushToTalkScreen(
         }
         Spacer(modifier = Modifier.height(48.dp))
         TextButton(onClick = onExit) {
-            Text("Salir", fontSize = if (isAbuela) 16.sp else 14.sp)
+            Text(stringResource(R.string.action_exit), fontSize = if (isAbuela) 16.sp else 14.sp)
         }
     }
 }
