@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("com.google.gms.google-services")
 }
 
 val keystoreProperties = Properties().apply {
@@ -76,6 +77,10 @@ dependencies {
 
     // Audio en tiempo real (walkie-talkie) - variante solo audio, sin video/IA/extensiones
     implementation("io.agora.rtc:voice-sdk:4.5.2")
+
+    // Login por teléfono + OTP
+    implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
+    implementation("com.google.firebase:firebase-auth")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.8")
 }

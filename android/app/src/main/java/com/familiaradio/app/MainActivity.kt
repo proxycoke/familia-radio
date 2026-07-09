@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -38,7 +39,6 @@ import androidx.core.os.LocaleListCompat
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.UUID
 
 // Servidor de tokens y familias: desplegado en Render, accesible desde cualquier red.
 private const val TOKEN_SERVER_URL = "https://familia-radio-server.onrender.com"
@@ -93,14 +93,6 @@ private data class Membership(
 private object MembershipStore {
     private const val PREFS = "familia_radio_prefs"
 
-    fun getOrCreateDeviceId(context: Context): String {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        prefs.getString("device_id", null)?.let { return it }
-        val newId = UUID.randomUUID().toString()
-        prefs.edit().putString("device_id", newId).apply()
-        return newId
-    }
-
     fun load(context: Context): Membership? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val familyId = prefs.getInt("family_id", -1)
@@ -145,6 +137,7 @@ class MainActivity : ComponentActivity() {
     private var localConnectionManager: AgoraConnectionManager? = null
     private var isServiceBound = false
     private val connectionManagerState = mutableStateOf<AgoraConnectionManager?>(null)
+    private val phoneAuthManager = PhoneAuthManager()
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -174,7 +167,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FamiliaRadioApp(
-                deviceId = { MembershipStore.getOrCreateDeviceId(applicationContext) },
+                isAuthenticated = { phoneAuthManager.isAuthenticated },
+                sendCode = { phone, onCodeSent, onAutoVerified, onError ->
+                    phoneAuthManager.sendCode(this, phone, onCodeSent, onAutoVerified, onError)
+                },
+                confirmCode = { code, onSuccess, onError -> phoneAuthManager.confirmCode(code, onSuccess, onError) },
                 loadMembership = { MembershipStore.load(applicationContext) },
                 saveMembership = { membership ->
                     MembershipStore.save(applicationContext, membership)
@@ -245,6 +242,9 @@ class MainActivity : ComponentActivity() {
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 15000
                 connection.readTimeout = 60000
+                phoneAuthManager.getIdTokenBlocking()?.let {
+                    connection.setRequestProperty("Authorization", "Bearer $it")
+                }
                 val code = connection.responseCode
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream
                 val body = stream?.bufferedReader()?.readText() ?: ""
@@ -270,6 +270,9 @@ class MainActivity : ComponentActivity() {
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.connectTimeout = 15000
                 connection.readTimeout = 60000
+                phoneAuthManager.getIdTokenBlocking()?.let {
+                    connection.setRequestProperty("Authorization", "Bearer $it")
+                }
                 connection.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = connection.responseCode
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream
@@ -290,10 +293,8 @@ class MainActivity : ComponentActivity() {
     )
 
     private fun createFamily(role: Role, onResult: (Membership) -> Unit, onError: (String) -> Unit) {
-        val deviceId = MembershipStore.getOrCreateDeviceId(applicationContext)
         val body = JSONObject().apply {
             put("role", role.name)
-            put("deviceId", deviceId)
         }
         httpPostJson("/families", body, onResult = { code, responseBody ->
             if (code == 201) {
@@ -310,10 +311,8 @@ class MainActivity : ComponentActivity() {
         onResult: (Membership) -> Unit,
         onError: (String) -> Unit
     ) {
-        val deviceId = MembershipStore.getOrCreateDeviceId(applicationContext)
         val body = JSONObject().apply {
             put("role", role.name)
-            put("deviceId", deviceId)
         }
         httpPostJson("/families/${inviteCode.trim().uppercase()}/join", body, onResult = { code, responseBody ->
             when (code) {
@@ -342,7 +341,9 @@ private enum class Role { ABUELA, CUIDADOR }
 
 @Composable
 private fun FamiliaRadioApp(
-    deviceId: () -> String,
+    isAuthenticated: () -> Boolean,
+    sendCode: (String, () -> Unit, () -> Unit, (String) -> Unit) -> Unit,
+    confirmCode: (String, () -> Unit, (String) -> Unit) -> Unit,
     loadMembership: () -> Membership?,
     saveMembership: (Membership) -> Unit,
     forgetMembership: () -> Unit,
@@ -354,6 +355,7 @@ private fun FamiliaRadioApp(
     onActivateConnection: (Role) -> Unit,
     onStopConnection: (Role) -> Unit
 ) {
+    var authenticated by remember { mutableStateOf(isAuthenticated()) }
     var membership by remember { mutableStateOf(loadMembership()) }
     var connected by remember { mutableStateOf(false) }
     var sessionActive by remember { mutableStateOf(true) }
@@ -362,6 +364,15 @@ private fun FamiliaRadioApp(
 
     MaterialTheme(colorScheme = colorsForRole(membership?.role)) {
         Surface(modifier = Modifier.fillMaxSize()) {
+            if (!authenticated) {
+                PhoneAuthScreen(
+                    onSendCode = sendCode,
+                    onConfirmCode = confirmCode,
+                    onVerified = { authenticated = true }
+                )
+                return@Surface
+            }
+
             val currentMembership = membership
 
             if (currentMembership == null) {
@@ -404,7 +415,7 @@ private fun FamiliaRadioApp(
                     if (manager == null) return@LaunchedEffect
                     statusMessage = connectingLabel
                     if (hasMicPermission()) {
-                        manager.connect(currentMembership.familyId, deviceId(), {
+                        manager.connect(currentMembership.familyId, {
                             connected = true
                             statusMessage = ""
                             if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
@@ -412,7 +423,7 @@ private fun FamiliaRadioApp(
                     } else {
                         requestMicPermission { granted ->
                             if (granted) {
-                                manager.connect(currentMembership.familyId, deviceId(), {
+                                manager.connect(currentMembership.familyId, {
                                     connected = true
                                     statusMessage = ""
                                     if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
@@ -441,6 +452,105 @@ private fun FamiliaRadioApp(
                     sessionActive = false
                 }
             )
+        }
+    }
+}
+
+private enum class PhoneAuthStep { PHONE_ENTRY, CODE_ENTRY }
+
+@Composable
+private fun PhoneAuthScreen(
+    onSendCode: (String, () -> Unit, () -> Unit, (String) -> Unit) -> Unit,
+    onConfirmCode: (String, () -> Unit, (String) -> Unit) -> Unit,
+    onVerified: () -> Unit
+) {
+    var step by remember { mutableStateOf(PhoneAuthStep.PHONE_ENTRY) }
+    var phoneInput by remember { mutableStateOf("") }
+    var codeInput by remember { mutableStateOf("") }
+    var loading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        when (step) {
+            PhoneAuthStep.PHONE_ENTRY -> {
+                LanguageToggle()
+                Spacer(modifier = Modifier.height(16.dp))
+                Text("📱", fontSize = 48.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.phone_auth_title),
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                OutlinedTextField(
+                    value = phoneInput,
+                    onValueChange = { phoneInput = it },
+                    label = { Text(stringResource(R.string.phone_number_label)) },
+                    placeholder = { Text("+51 999 999 999") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = {
+                        loading = true; errorMessage = ""
+                        onSendCode(
+                            phoneInput.trim(),
+                            { loading = false; step = PhoneAuthStep.CODE_ENTRY },
+                            { loading = false; onVerified() },
+                            { e -> loading = false; errorMessage = e }
+                        )
+                    },
+                    enabled = !loading && phoneInput.trim().length >= 8,
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth().height(64.dp)
+                ) { Text(stringResource(R.string.action_send_code), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                SetupStatus(loading, errorMessage)
+            }
+
+            PhoneAuthStep.CODE_ENTRY -> {
+                Text("🔐", fontSize = 48.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    stringResource(R.string.otp_title),
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                OutlinedTextField(
+                    value = codeInput,
+                    onValueChange = { codeInput = it.filter { c -> c.isDigit() }.take(6) },
+                    label = { Text(stringResource(R.string.otp_code_label)) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Button(
+                    onClick = {
+                        loading = true; errorMessage = ""
+                        onConfirmCode(
+                            codeInput.trim(),
+                            { loading = false; onVerified() },
+                            { e -> loading = false; errorMessage = e }
+                        )
+                    },
+                    enabled = !loading && codeInput.length >= 6,
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth().height(64.dp)
+                ) { Text(stringResource(R.string.action_confirm_code), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+                Spacer(modifier = Modifier.height(16.dp))
+                TextButton(onClick = { step = PhoneAuthStep.PHONE_ENTRY; codeInput = ""; errorMessage = "" }) {
+                    Text(stringResource(R.string.action_change_number))
+                }
+                SetupStatus(loading, errorMessage)
+            }
         }
     }
 }

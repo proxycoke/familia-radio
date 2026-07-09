@@ -1,6 +1,15 @@
 <resources>
     <string name="app_name">Familia Radio</string>
 
+    <!-- Phone login -->
+    <string name="phone_auth_title">Enter your phone number</string>
+    <string name="phone_number_label">Phone number</string>
+    <string name="action_send_code">Send code</string>
+    <string name="otp_title">Enter the code we sent you by SMS</string>
+    <string name="otp_code_label">6-digit code</string>
+    <string name="action_confirm_code">Confirm code</string>
+    <string name="action_change_number">Change number</string>
+
     <!-- Role selection / initial setup -->
     <string name="setup_welcome_title">Welcome to Familia Radio</string>
     <string name="setup_create_family_button">Create a new family</string>

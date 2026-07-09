@@ -1,6 +1,15 @@
 <resources>
     <string name="app_name">Familia Radio</string>
 
+    <!-- Login por teléfono -->
+    <string name="phone_auth_title">Ingresa tu número de teléfono</string>
+    <string name="phone_number_label">Número de teléfono</string>
+    <string name="action_send_code">Enviar código</string>
+    <string name="otp_title">Ingresa el código que te enviamos por SMS</string>
+    <string name="otp_code_label">Código de 6 dígitos</string>
+    <string name="action_confirm_code">Confirmar código</string>
+    <string name="action_change_number">Cambiar número</string>
+
     <!-- Selección de rol / configuración inicial -->
     <string name="setup_welcome_title">Bienvenido a Familia Radio</string>
     <string name="setup_create_family_button">Crear una familia nueva</string>

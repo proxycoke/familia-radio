@@ -25,15 +25,14 @@ private const val TOKEN_SERVER_URL = "https://familia-radio-server.onrender.com"
 class AgoraConnectionManager(private val context: Context) {
     private var rtcEngine: RtcEngine? = null
     private var activeFamilyId: Int? = null
-    private var activeDeviceId: String? = null
     private var rejoinInProgress = false
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val authManager = PhoneAuthManager()
     val reconnecting = mutableStateOf(false)
 
-    fun connect(familyId: Int, deviceId: String, onJoined: () -> Unit, onError: (String) -> Unit) {
+    fun connect(familyId: Int, onJoined: () -> Unit, onError: (String) -> Unit) {
         activeFamilyId = familyId
-        activeDeviceId = deviceId
-        fetchTokenAndJoin(familyId, deviceId, onJoined, onError)
+        fetchTokenAndJoin(familyId, onJoined, onError)
     }
 
     fun setMicMuted(muted: Boolean) {
@@ -50,7 +49,6 @@ class AgoraConnectionManager(private val context: Context) {
 
     fun leaveChannel() {
         activeFamilyId = null
-        activeDeviceId = null
         rejoinInProgress = false
         reconnecting.value = false
         mainHandler.removeCallbacksAndMessages(null)
@@ -66,6 +64,9 @@ class AgoraConnectionManager(private val context: Context) {
                 val connection = url.openConnection() as HttpURLConnection
                 connection.connectTimeout = 15000
                 connection.readTimeout = 60000
+                authManager.getIdTokenBlocking()?.let {
+                    connection.setRequestProperty("Authorization", "Bearer $it")
+                }
                 val code = connection.responseCode
                 val stream = if (code in 200..299) connection.inputStream else connection.errorStream
                 val body = stream?.bufferedReader()?.readText() ?: ""
@@ -78,11 +79,10 @@ class AgoraConnectionManager(private val context: Context) {
 
     private fun fetchToken(
         familyId: Int,
-        deviceId: String,
         onResult: (appId: String, channelName: String, uid: Int, token: String) -> Unit,
         onError: (String) -> Unit
     ) {
-        httpGet("/token?familyId=$familyId&deviceId=$deviceId", onResult = { code, responseBody ->
+        httpGet("/token?familyId=$familyId", onResult = { code, responseBody ->
             if (code != 200) {
                 onError(context.getString(R.string.error_token_server_status, code))
                 return@httpGet
@@ -99,11 +99,10 @@ class AgoraConnectionManager(private val context: Context) {
 
     private fun fetchTokenAndJoin(
         familyId: Int,
-        deviceId: String,
         onJoined: () -> Unit,
         onError: (String) -> Unit
     ) {
-        fetchToken(familyId, deviceId, onResult = { appId, channelName, uid, token ->
+        fetchToken(familyId, onResult = { appId, channelName, uid, token ->
             joinAgoraChannel(appId, channelName, token, uid, onJoined, onError)
         }, onError = onError)
     }
@@ -143,8 +142,7 @@ class AgoraConnectionManager(private val context: Context) {
                 }
                 override fun onTokenPrivilegeWillExpire(token: String?) {
                     val familyIdForRenewal = activeFamilyId ?: return
-                    val deviceIdForRenewal = activeDeviceId ?: return
-                    fetchToken(familyIdForRenewal, deviceIdForRenewal, onResult = { _, _, _, freshToken ->
+                    fetchToken(familyIdForRenewal, onResult = { _, _, _, freshToken ->
                         rtcEngine?.renewToken(freshToken)
                     }, onError = {
                         // Se reintentará solo cuando el token realmente expire y se corte la conexión.
@@ -178,11 +176,10 @@ class AgoraConnectionManager(private val context: Context) {
 
     private fun attemptReconnect() {
         val familyId = activeFamilyId ?: return
-        val deviceId = activeDeviceId ?: return
         if (rejoinInProgress) return
         rejoinInProgress = true
         reconnecting.value = true
-        fetchTokenAndJoin(familyId, deviceId, onJoined = {
+        fetchTokenAndJoin(familyId, onJoined = {
             // onJoinChannelSuccess ya limpia rejoinInProgress y reconnecting
         }, onError = {
             rejoinInProgress = false
