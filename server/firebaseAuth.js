@@ -1,9 +1,11 @@
-const admin = require('firebase-admin');
+const { initializeApp } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 
 // Solo necesitamos verificar tokens (no crear usuarios ni nada admin), así que
 // alcanza con inicializar con el projectId — no hace falta una service account
 // key, lo que evita tener que guardar ese secreto en Render.
-admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
+const app = initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
+const auth = getAuth(app);
 
 // Exige un ID token válido de Firebase (número de teléfono verificado por SMS)
 // en el header Authorization. La identidad real del usuario pasa a ser
@@ -15,7 +17,7 @@ async function requireVerifiedPhone(req, res, next) {
     return res.status(401).json({ error: 'Falta el token de autenticación' });
   }
   try {
-    const decoded = await admin.auth().verifyIdToken(idToken);
+    const decoded = await auth.verifyIdToken(idToken);
     if (!decoded.phone_number) {
       return res.status(401).json({ error: 'El token no tiene un número de teléfono verificado' });
     }
