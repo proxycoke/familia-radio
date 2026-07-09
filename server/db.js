@@ -27,6 +27,16 @@ async function initSchema() {
       UNIQUE(family_id, device_id)
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      phone_number TEXT PRIMARY KEY,
+      nombres TEXT NOT NULL,
+      apellidos TEXT NOT NULL,
+      fecha_nacimiento DATE NOT NULL,
+      email TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 }
 
 function channelNameForFamily(familyId) {
@@ -107,6 +117,19 @@ async function insertMember({ familyId, role, deviceId, displayName }) {
   return result.rows[0];
 }
 
+async function upsertUserProfile({ phoneNumber, nombres, apellidos, fechaNacimiento, email }) {
+  const result = await pool.query(
+    `INSERT INTO users (phone_number, nombres, apellidos, fecha_nacimiento, email)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (phone_number) DO UPDATE
+       SET nombres = EXCLUDED.nombres, apellidos = EXCLUDED.apellidos,
+           fecha_nacimiento = EXCLUDED.fecha_nacimiento, email = EXCLUDED.email
+     RETURNING *`,
+    [phoneNumber, nombres, apellidos, fechaNacimiento, email]
+  );
+  return result.rows[0];
+}
+
 module.exports = {
   pool,
   initSchema,
@@ -117,5 +140,6 @@ module.exports = {
   getMembers,
   getMemberCounts,
   findExistingMember,
-  insertMember
+  insertMember,
+  upsertUserProfile
 };

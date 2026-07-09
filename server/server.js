@@ -122,6 +122,26 @@ app.post('/families/:inviteCode/join', joinFamilyLimiter, requireVerifiedPhone, 
   }
 });
 
+app.post('/users/profile', createFamilyLimiter, requireVerifiedPhone, async (req, res) => {
+  const { nombres, apellidos, fechaNacimiento, email } = req.body || {};
+  if (!nombres || !apellidos || !fechaNacimiento || !email) {
+    return res.status(400).json({ error: 'Faltan datos del perfil' });
+  }
+  try {
+    await db.upsertUserProfile({
+      phoneNumber: req.verifiedPhone,
+      nombres,
+      apellidos,
+      fechaNacimiento,
+      email
+    });
+    res.status(201).json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'No se pudo guardar el perfil' });
+  }
+});
+
 app.get('/families/:inviteCode', async (req, res) => {
   try {
     const family = await db.getFamilyByInviteCode(req.params.inviteCode);
