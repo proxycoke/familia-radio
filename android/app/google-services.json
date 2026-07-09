@@ -12,7 +12,28 @@
           "package_name": "com.familiaradio.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "58373918901-4122gmfhicrp62a7ngjajbji3uv6f37f.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.familiaradio.app",
+            "certificate_hash": "945f71208025bd8fce27f4dfca914f6f635a02f7"
+          }
+        },
+        {
+          "client_id": "58373918901-6uqhi9pdignvsjefrd9rk0huhp5ll9cc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.familiaradio.app",
+            "certificate_hash": "e044fdf8fa7b26e67a9e62fd8ba49e85b83d603c"
+          }
+        },
+        {
+          "client_id": "58373918901-jh9uio5le428v7s7d3us0645j4ir2m59.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyC6-OT6udvrf56wT7OGVZTzl4tglHB7ZnY"
@@ -20,7 +41,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "58373918901-jh9uio5le428v7s7d3us0645j4ir2m59.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

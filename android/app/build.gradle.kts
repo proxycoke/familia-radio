@@ -78,9 +78,10 @@ dependencies {
     // Audio en tiempo real (walkie-talkie) - variante solo audio, sin video/IA/extensiones
     implementation("io.agora.rtc:voice-sdk:4.5.2")
 
-    // Login por teléfono + OTP
+    // Login: teléfono/OTP, correo/contraseña, Google
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.8")
 }

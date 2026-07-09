@@ -27,7 +27,7 @@ class AgoraConnectionManager(private val context: Context) {
     private var activeFamilyId: Int? = null
     private var rejoinInProgress = false
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val authManager = PhoneAuthManager()
+    private val authManager = AuthManager()
     val reconnecting = mutableStateOf(false)
 
     fun connect(familyId: Int, onJoined: () -> Unit, onError: (String) -> Unit) {

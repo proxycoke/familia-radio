@@ -1,7 +1,21 @@
 <resources>
-    <string name="app_name">Familia Radio</string>
+    <string name="app_name">HablaPe</string>
 
-    <!-- Login por teléfono -->
+    <string name="action_back">Regresar</string>
+
+    <!-- Login -->
+    <string name="login_identifier_label">Correo o teléfono</string>
+    <string name="login_password_label">Contraseña</string>
+    <string name="login_remember_me">Recordar mis datos</string>
+    <string name="login_forgot_password">¿Olvidaste tu contraseña?</string>
+    <string name="action_login">Iniciar sesión</string>
+    <string name="login_or_divider">o</string>
+    <string name="login_with_phone">Ingresar con teléfono</string>
+    <string name="login_with_google">Ingresar con Google</string>
+    <string name="error_login_failed">No se pudo iniciar sesión: %1$s</string>
+    <string name="error_google_sign_in_failed">No se pudo iniciar sesión con Google</string>
+
+    <!-- Registro por teléfono -->
     <string name="phone_auth_title">Ingresa tu número de teléfono</string>
     <string name="phone_number_label">Número de teléfono</string>
     <string name="action_send_code">Enviar código</string>
@@ -9,9 +23,32 @@
     <string name="otp_code_label">Código de 6 dígitos</string>
     <string name="action_confirm_code">Confirmar código</string>
     <string name="action_change_number">Cambiar número</string>
+    <string name="register_form_title">Completa tus datos</string>
+    <string name="label_first_name">Nombres</string>
+    <string name="label_last_name">Apellidos</string>
+    <string name="label_birth_date">Fecha de nacimiento</string>
+    <string name="label_day">Día</string>
+    <string name="label_month">Mes</string>
+    <string name="label_year">Año</string>
+    <string name="label_email">Correo electrónico</string>
+    <string name="label_password">Contraseña</string>
+    <string name="label_confirm_password">Confirmar contraseña</string>
+    <string name="action_register">Registrarme</string>
+    <string name="register_success_message">¡Registro exitoso!</string>
+    <string name="error_passwords_dont_match">Las contraseñas no coinciden</string>
+    <string name="error_registration_failed">No se pudo completar el registro: %1$s</string>
+
+    <!-- Recuperar contraseña -->
+    <string name="forgot_password_title">Recuperar contraseña</string>
+    <string name="forgot_password_phone_prompt">Ingresa tu número de teléfono registrado</string>
+    <string name="new_password_title">Ingresa tu nueva contraseña</string>
+    <string name="label_new_password">Nueva contraseña</string>
+    <string name="label_confirm_new_password">Confirmar nueva contraseña</string>
+    <string name="action_change_password">Cambiar contraseña</string>
+    <string name="password_change_success">¡Cambio de contraseña exitoso!</string>
 
     <!-- Selección de rol / configuración inicial -->
-    <string name="setup_welcome_title">Bienvenido a Familia Radio</string>
+    <string name="setup_welcome_title">Bienvenido a HablaPe</string>
     <string name="setup_create_family_button">Crear una familia nueva</string>
     <string name="setup_join_family_button">Unirme con un código</string>
     <string name="setup_choose_role_title">¿Cuál va a ser tu rol?</string>
@@ -57,10 +94,25 @@
 
     <!-- Notificación del servicio en segundo plano -->
     <string name="notification_channel_description">Mantiene el radio familiar conectado en segundo plano</string>
-    <string name="notification_title_active">Familia Radio activo</string>
+    <string name="notification_title_active">HablaPe activo</string>
     <string name="notification_text_listening">Escuchando al radio familiar</string>
 
     <!-- Selector de idioma -->
     <string name="language_spanish">Español</string>
     <string name="language_english">English</string>
+
+    <string-array name="months">
+        <item>Enero</item>
+        <item>Febrero</item>
+        <item>Marzo</item>
+        <item>Abril</item>
+        <item>Mayo</item>
+        <item>Junio</item>
+        <item>Julio</item>
+        <item>Agosto</item>
+        <item>Septiembre</item>
+        <item>Octubre</item>
+        <item>Noviembre</item>
+        <item>Diciembre</item>
+    </string-array>
 </resources>

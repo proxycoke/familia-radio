@@ -1,7 +1,21 @@
 <resources>
-    <string name="app_name">Familia Radio</string>
+    <string name="app_name">HablaPe</string>
 
-    <!-- Phone login -->
+    <string name="action_back">Back</string>
+
+    <!-- Login -->
+    <string name="login_identifier_label">Email or phone</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_remember_me">Remember me</string>
+    <string name="login_forgot_password">Forgot your password?</string>
+    <string name="action_login">Log in</string>
+    <string name="login_or_divider">or</string>
+    <string name="login_with_phone">Log in with phone</string>
+    <string name="login_with_google">Log in with Google</string>
+    <string name="error_login_failed">Could not log in: %1$s</string>
+    <string name="error_google_sign_in_failed">Could not log in with Google</string>
+
+    <!-- Phone registration -->
     <string name="phone_auth_title">Enter your phone number</string>
     <string name="phone_number_label">Phone number</string>
     <string name="action_send_code">Send code</string>
@@ -9,9 +23,32 @@
     <string name="otp_code_label">6-digit code</string>
     <string name="action_confirm_code">Confirm code</string>
     <string name="action_change_number">Change number</string>
+    <string name="register_form_title">Complete your details</string>
+    <string name="label_first_name">First name</string>
+    <string name="label_last_name">Last name</string>
+    <string name="label_birth_date">Date of birth</string>
+    <string name="label_day">Day</string>
+    <string name="label_month">Month</string>
+    <string name="label_year">Year</string>
+    <string name="label_email">Email</string>
+    <string name="label_password">Password</string>
+    <string name="label_confirm_password">Confirm password</string>
+    <string name="action_register">Sign up</string>
+    <string name="register_success_message">Registration successful!</string>
+    <string name="error_passwords_dont_match">Passwords don\'t match</string>
+    <string name="error_registration_failed">Could not complete registration: %1$s</string>
+
+    <!-- Forgot password -->
+    <string name="forgot_password_title">Recover password</string>
+    <string name="forgot_password_phone_prompt">Enter your registered phone number</string>
+    <string name="new_password_title">Enter your new password</string>
+    <string name="label_new_password">New password</string>
+    <string name="label_confirm_new_password">Confirm new password</string>
+    <string name="action_change_password">Change password</string>
+    <string name="password_change_success">Password changed successfully!</string>
 
     <!-- Role selection / initial setup -->
-    <string name="setup_welcome_title">Welcome to Familia Radio</string>
+    <string name="setup_welcome_title">Welcome to HablaPe</string>
     <string name="setup_create_family_button">Create a new family</string>
     <string name="setup_join_family_button">Join with a code</string>
     <string name="setup_choose_role_title">What will your role be?</string>
@@ -57,10 +94,25 @@
 
     <!-- Background service notification -->
     <string name="notification_channel_description">Keeps the family radio connected in the background</string>
-    <string name="notification_title_active">Familia Radio active</string>
+    <string name="notification_title_active">HablaPe active</string>
     <string name="notification_text_listening">Listening to the family radio</string>
 
     <!-- Language selector -->
     <string name="language_spanish">Español</string>
     <string name="language_english">English</string>
+
+    <string-array name="months">
+        <item>January</item>
+        <item>February</item>
+        <item>March</item>
+        <item>April</item>
+        <item>May</item>
+        <item>June</item>
+        <item>July</item>
+        <item>August</item>
+        <item>September</item>
+        <item>October</item>
+        <item>November</item>
+        <item>December</item>
+    </string-array>
 </resources>
