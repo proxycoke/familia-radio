@@ -554,10 +554,10 @@ private fun ChooseRecoveryMethodScreen(
     onChooseSms: () -> Unit,
     onChooseEmail: () -> Unit
 ) {
-    // Título/subtítulo van fijos cerca del borde superior y las 2 tarjetas se centran
-    // en el espacio restante (spacers con weight arriba y abajo de ellas). El loader
-    // se dibuja DENTRO de la tarjeta tocada en vez de agregarse debajo, así nada más
-    // en la pantalla se mueve mientras se espera la respuesta del servidor.
+    // Título/subtítulo van fijos cerca del borde superior, con un espacio fijo (no
+    // flexible) antes de las tarjetas para que no queden con un hueco enorme en medio.
+    // El loader se dibuja DENTRO de la tarjeta tocada en vez de agregarse debajo, así
+    // nada más en la pantalla se mueve mientras se espera la respuesta del servidor.
     var tappedMethod by remember { mutableStateOf<RecoveryMethod?>(null) }
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -576,7 +576,7 @@ private fun ChooseRecoveryMethodScreen(
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(40.dp))
             if (phoneMasked.isNotBlank()) {
                 RecoveryOptionCard(
                     emoji = "📱",
@@ -784,7 +784,7 @@ private fun RegisterFormScreen(
         Spacer(modifier = Modifier.height(10.dp))
         OutlinedTextField(
             value = nombres,
-            onValueChange = { nombres = it },
+            onValueChange = { nombres = it.filter { c -> c.isLetter() || c == ' ' } },
             label = { Text(stringResource(R.string.label_first_name)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -792,7 +792,7 @@ private fun RegisterFormScreen(
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = apellidos,
-            onValueChange = { apellidos = it },
+            onValueChange = { apellidos = it.filter { c -> c.isLetter() || c == ' ' } },
             label = { Text(stringResource(R.string.label_last_name)) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
@@ -806,14 +806,14 @@ private fun RegisterFormScreen(
                 options = (1..31).map { it.toString() },
                 selectedIndex = day - 1,
                 onSelected = { day = it + 1 },
-                modifier = Modifier.weight(0.8f)
+                modifier = Modifier.weight(1f)
             )
             Dropdown(
                 label = stringResource(R.string.label_month),
                 options = months.toList(),
                 selectedIndex = month,
                 onSelected = { month = it },
-                modifier = Modifier.weight(1.7f)
+                modifier = Modifier.weight(1.5f)
             )
             OutlinedTextField(
                 value = year,
@@ -885,8 +885,19 @@ private fun RegisterFormScreen(
             enabled = !loading && allFilled,
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth().height(56.dp)
-        ) { Text(stringResource(R.string.action_register), fontSize = 17.sp, fontWeight = FontWeight.Bold) }
-        SetupStatus(loading, errorMessage)
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Text(stringResource(R.string.action_register), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        // El loader del botón ya cubre el estado "loading"; acá solo mostramos el error.
+        SetupStatus(loading = false, errorMessage = errorMessage)
         Spacer(modifier = Modifier.height(12.dp))
     }
 }
