@@ -14,6 +14,9 @@ import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -24,6 +27,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,6 +43,7 @@ import androidx.core.os.LocaleListCompat
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -151,7 +156,13 @@ class MainActivity : ComponentActivity() {
             val account = task.getResult(ApiException::class.java)
             onGoogleSignInResult?.invoke(account.idToken, null)
         } catch (e: ApiException) {
-            onGoogleSignInResult?.invoke(null, e.message ?: "Google sign-in falló")
+            // Código 12501 = el usuario canceló el selector de cuenta de Google;
+            // no es un error real, así que no le mostramos nada.
+            if (e.statusCode != com.google.android.gms.common.api.CommonStatusCodes.CANCELED) {
+                onGoogleSignInResult?.invoke(null, e.message ?: "Google sign-in falló")
+            } else {
+                onGoogleSignInResult?.invoke(null, "")
+            }
         }
     }
 
@@ -220,7 +231,15 @@ class MainActivity : ComponentActivity() {
                     setNewPassword = { newPassword, onSuccess, onError ->
                         authManager.setNewPassword(newPassword, onSuccess, onError)
                     },
-                    signOut = { authManager.signOut() }
+                    signOut = { authManager.signOut() },
+                    fetchRecoveryOptions = { email, onResult, onError ->
+                        fetchRecoveryOptions(email, onResult, onError)
+                    },
+                    sendEmailOtp = { email, onSuccess, onError -> sendEmailOtp(email, onSuccess, onError) },
+                    verifyEmailOtp = { email, code, onSuccess, onError -> verifyEmailOtp(email, code, onSuccess, onError) },
+                    resetPasswordViaEmail = { email, code, newPassword, onSuccess, onError ->
+                        resetPasswordViaEmail(email, code, newPassword, onSuccess, onError)
+                    }
                 ),
                 loadMembership = { MembershipStore.load(applicationContext) },
                 saveMembership = { membership ->
@@ -397,6 +416,56 @@ class MainActivity : ComponentActivity() {
         }, onError = onError)
     }
 
+    // Estos 4 llamados son públicos (sin token de Firebase, porque el usuario todavía
+    // no inició sesión mientras recupera la contraseña) — los maneja el propio backend,
+    // no Firebase, porque Firebase no tiene "código de 6 dígitos por correo" nativo.
+    private fun fetchRecoveryOptions(
+        email: String,
+        onResult: (phone: String?, phoneMasked: String?, emailMasked: String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val body = JSONObject().apply { put("email", email) }
+        httpPostJson("/auth/recovery-options", body, onResult = { code, responseBody ->
+            if (code == 200) {
+                val json = JSONObject(responseBody)
+                val phone = if (json.has("phone") && !json.isNull("phone")) json.getString("phone") else null
+                val phoneMasked = if (json.has("phoneMasked") && !json.isNull("phoneMasked")) json.getString("phoneMasked") else null
+                onResult(phone, phoneMasked, json.getString("emailMasked"))
+            } else {
+                onError(errorMessageFrom(responseBody, "No encontramos una cuenta con ese correo"))
+            }
+        }, onError = onError)
+    }
+
+    private fun sendEmailOtp(email: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val body = JSONObject().apply { put("email", email) }
+        httpPostJson("/auth/email-otp/send", body, onResult = { code, responseBody ->
+            if (code == 200) onSuccess() else onError(errorMessageFrom(responseBody, "No se pudo enviar el código"))
+        }, onError = onError)
+    }
+
+    private fun verifyEmailOtp(email: String, otpCode: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val body = JSONObject().apply { put("email", email); put("code", otpCode) }
+        httpPostJson("/auth/email-otp/verify", body, onResult = { code, responseBody ->
+            if (code == 200) onSuccess() else onError(errorMessageFrom(responseBody, "Código inválido o expirado"))
+        }, onError = onError)
+    }
+
+    private fun resetPasswordViaEmail(
+        email: String,
+        otpCode: String,
+        newPassword: String,
+        onSuccess: () -> Unit,
+        onError: (String) -> Unit
+    ) {
+        val body = JSONObject().apply {
+            put("email", email); put("code", otpCode); put("newPassword", newPassword)
+        }
+        httpPostJson("/auth/reset-password", body, onResult = { code, responseBody ->
+            if (code == 200) onSuccess() else onError(errorMessageFrom(responseBody, "No se pudo cambiar la contraseña"))
+        }, onError = onError)
+    }
+
     private fun errorMessageFrom(responseBody: String, fallback: String): String =
         runCatching { JSONObject(responseBody).getString("error") }.getOrDefault(fallback)
 
@@ -411,6 +480,11 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Role { ABUELA, CUIDADOR }
+
+// Compartido entre pantallas para que LanguageToggle (usado en varios archivos/composables)
+// pueda animar un fundido antes de disparar el cambio de idioma, que recrea la Activity de
+// golpe — sin esto el cambio de idioma se ve como un corte seco.
+private val LocalLanguageFadeAlpha = compositionLocalOf<Animatable<Float, AnimationVector1D>?> { null }
 
 @Composable
 private fun FamiliaRadioApp(
@@ -433,9 +507,11 @@ private fun FamiliaRadioApp(
     var sessionActive by remember { mutableStateOf(true) }
     var statusMessage by remember { mutableStateOf("") }
     var retryCount by remember { mutableStateOf(0) }
+    val languageFadeAlpha = remember { Animatable(1f) }
 
     MaterialTheme(colorScheme = colorsForRole(membership?.role)) {
-        Surface(modifier = Modifier.fillMaxSize()) {
+      CompositionLocalProvider(LocalLanguageFadeAlpha provides languageFadeAlpha) {
+        Surface(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = languageFadeAlpha.value }) {
             if (!authenticated) {
                 AuthFlow(
                     callbacks = authCallbacks,
@@ -524,6 +600,7 @@ private fun FamiliaRadioApp(
                 }
             )
         }
+      }
     }
 }
 
@@ -756,11 +833,23 @@ private fun IdleScreen(
 @Composable
 fun LanguageToggle() {
     val context = LocalContext.current
+    val fadeAlpha = LocalLanguageFadeAlpha.current
+    val scope = rememberCoroutineScope()
+    val changeLanguage: (String) -> Unit = { tag ->
+        if (fadeAlpha != null) {
+            scope.launch {
+                fadeAlpha.animateTo(0f, animationSpec = tween(180))
+                setAppLanguage(context, tag)
+            }
+        } else {
+            setAppLanguage(context, tag)
+        }
+    }
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        TextButton(onClick = { setAppLanguage(context, "es") }) {
+        TextButton(onClick = { changeLanguage("es") }) {
             Text(stringResource(R.string.language_spanish), fontSize = 13.sp)
         }
-        TextButton(onClick = { setAppLanguage(context, "en") }) {
+        TextButton(onClick = { changeLanguage("en") }) {
             Text(stringResource(R.string.language_english), fontSize = 13.sp)
         }
     }

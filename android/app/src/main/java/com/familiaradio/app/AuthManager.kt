@@ -23,6 +23,8 @@ class AuthManager {
     private val auth = FirebaseAuth.getInstance()
     private var verificationId: String? = null
     private var pendingPhoneCredential: PhoneAuthCredential? = null
+    private var resendToken: PhoneAuthProvider.ForceResendingToken? = null
+    private var lastPhoneNumber: String? = null
 
     val isAuthenticated: Boolean get() = auth.currentUser != null
 
@@ -40,6 +42,9 @@ class AuthManager {
     }
 
     // Paso 1 del registro por teléfono (y también de "olvidé mi contraseña"): mandar OTP por SMS.
+    // Si ya se le pidió un código a este mismo número antes, usa el "resend token" de Firebase
+    // para que sea un reenvío real — sin eso, Firebase puede ignorar en silencio los pedidos
+    // repetidos al mismo número en poco tiempo (protección antiabuso) y el callback nunca llega.
     fun sendPhoneCode(
         activity: Activity,
         phoneNumber: String,
@@ -59,16 +64,21 @@ class AuthManager {
 
             override fun onCodeSent(id: String, token: PhoneAuthProvider.ForceResendingToken) {
                 verificationId = id
+                resendToken = token
                 onCodeSent()
             }
         }
-        val options = PhoneAuthOptions.newBuilder(auth)
+        val builder = PhoneAuthOptions.newBuilder(auth)
             .setPhoneNumber(phoneNumber)
             .setTimeout(60L, TimeUnit.SECONDS)
             .setActivity(activity)
             .setCallbacks(callbacks)
-            .build()
-        PhoneAuthProvider.verifyPhoneNumber(options)
+        val tokenToReuse = resendToken
+        if (phoneNumber == lastPhoneNumber && tokenToReuse != null) {
+            builder.setForceResendingToken(tokenToReuse)
+        }
+        lastPhoneNumber = phoneNumber
+        PhoneAuthProvider.verifyPhoneNumber(builder.build())
     }
 
     // Confirma el código y lo deja "pendiente" para el paso siguiente (crear cuenta o cambiar contraseña).

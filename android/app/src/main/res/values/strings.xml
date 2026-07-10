@@ -4,48 +4,61 @@
     <string name="action_back">Regresar</string>
 
     <!-- Login -->
-    <string name="login_identifier_label">Correo o teléfono</string>
     <string name="login_password_label">Contraseña</string>
     <string name="login_remember_me">Recordar mis datos</string>
     <string name="login_forgot_password">¿Olvidaste tu contraseña?</string>
     <string name="action_login">Iniciar sesión</string>
     <string name="login_or_divider">o</string>
-    <string name="login_with_phone">Ingresar con teléfono</string>
-    <string name="login_with_google">Ingresar con Google</string>
+    <string name="login_with_google">Sign in with Google</string>
+    <string name="login_no_account">¿No tienes cuenta?</string>
+    <string name="login_register_here">Regístrate aquí</string>
     <string name="error_login_failed">No se pudo iniciar sesión: %1$s</string>
     <string name="error_google_sign_in_failed">No se pudo iniciar sesión con Google</string>
 
     <!-- Registro por teléfono -->
-    <string name="phone_auth_title">Ingresa tu número de teléfono</string>
-    <string name="phone_number_label">Número de teléfono</string>
-    <string name="action_send_code">Enviar código</string>
-    <string name="otp_title">Ingresa el código que te enviamos por SMS</string>
-    <string name="otp_code_label">Código de 6 dígitos</string>
-    <string name="action_confirm_code">Confirmar código</string>
-    <string name="action_change_number">Cambiar número</string>
-    <string name="register_form_title">Completa tus datos</string>
+    <string name="phone_number_label">Número</string>
+    <string name="otp_title">Confirmación</string>
+    <string name="otp_subtitle">Ingresa el código que se ha enviado a %1$s para culminar el registro</string>
+    <string name="otp_title_recovery">Cambiar contraseña</string>
+    <string name="otp_subtitle_recovery">Ingresa el código que se ha enviado a %1$s para recuperar tu contraseña</string>
+    <string name="action_confirm_code">Confirmar</string>
+    <string name="action_resend_code">Reenviar código</string>
+    <string name="resend_code_success">¡Código reenviado!</string>
+    <string name="register_form_title">Regístrate</string>
     <string name="label_first_name">Nombres</string>
     <string name="label_last_name">Apellidos</string>
     <string name="label_birth_date">Fecha de nacimiento</string>
     <string name="label_day">Día</string>
     <string name="label_month">Mes</string>
     <string name="label_year">Año</string>
-    <string name="label_email">Correo electrónico</string>
+    <string name="label_email">Correo</string>
     <string name="label_password">Contraseña</string>
     <string name="label_confirm_password">Confirmar contraseña</string>
-    <string name="action_register">Registrarme</string>
-    <string name="register_success_message">¡Registro exitoso!</string>
+    <string name="accept_terms_prefix">Acepto los </string>
+    <string name="accept_terms_link">Términos y Condiciones</string>
+    <string name="accept_data_policy_prefix">Autorizo el </string>
+    <string name="accept_data_policy_link">tratamiento de datos personales</string>
+    <string name="terms_dialog_title">Términos y Condiciones</string>
+    <string name="terms_dialog_content">Al usar HablaPe aceptas que la app se usa para comunicación por voz entre miembros de una misma familia. Sos responsable de la información que compartís y del uso adecuado del servicio. Nos reservamos el derecho de suspender cuentas que hagan un uso indebido de la aplicación. Este es un texto provisional y será reemplazado por los términos legales definitivos.</string>
+    <string name="data_policy_dialog_title">Tratamiento de Datos Personales</string>
+    <string name="data_policy_dialog_content">Tus datos (nombre, correo, teléfono y fecha de nacimiento) se usan únicamente para crear tu cuenta, identificarte ante tu familia dentro de la app y brindarte soporte. No compartimos tu información con terceros con fines comerciales. Podés solicitar la eliminación de tus datos en cualquier momento. Este es un texto provisional y será reemplazado por la política de datos definitiva.</string>
+    <string name="action_close">Cerrar</string>
+    <string name="action_register">Continuar</string>
+    <string name="register_success_message">¡Ya estás registrad@! Ya puedes empezar a usar la aplicación, serás redirigido al inicio en unos segundos</string>
     <string name="error_passwords_dont_match">Las contraseñas no coinciden</string>
-    <string name="error_registration_failed">No se pudo completar el registro: %1$s</string>
 
     <!-- Recuperar contraseña -->
     <string name="forgot_password_title">Recuperar contraseña</string>
-    <string name="forgot_password_phone_prompt">Ingresa tu número de teléfono registrado</string>
-    <string name="new_password_title">Ingresa tu nueva contraseña</string>
-    <string name="label_new_password">Nueva contraseña</string>
+    <string name="forgot_password_email_prompt">Ingresa el correo de tu cuenta para continuar</string>
+    <string name="forgot_password_choose_method">Selecciona la forma como deseas recuperar tu contraseña</string>
+    <string name="recovery_via_sms">vía SMS: %1$s</string>
+    <string name="recovery_via_email">vía email: %1$s</string>
+    <string name="new_password_title">Cambiar contraseña</string>
+    <string name="new_password_hint">Recuerda poner una contraseña sencilla de recordar y segura</string>
+    <string name="label_new_password">Contraseña nueva</string>
     <string name="label_confirm_new_password">Confirmar nueva contraseña</string>
-    <string name="action_change_password">Cambiar contraseña</string>
-    <string name="password_change_success">¡Cambio de contraseña exitoso!</string>
+    <string name="action_change_password">Confirmar</string>
+    <string name="password_change_success">¡Contraseña cambiada!</string>
 
     <!-- Selección de rol / configuración inicial -->
     <string name="setup_welcome_title">Bienvenido a HablaPe</string>
