@@ -15,8 +15,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
@@ -43,6 +43,7 @@ import androidx.core.os.LocaleListCompat
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -487,9 +488,17 @@ class MainActivity : ComponentActivity() {
 private enum class Role { ABUELA, CUIDADOR }
 
 // Compartido entre pantallas para que LanguageToggle (usado en varios archivos/composables)
-// pueda animar un fundido antes de disparar el cambio de idioma, que recrea la Activity de
-// golpe — sin esto el cambio de idioma se ve como un corte seco.
-private val LocalLanguageFadeAlpha = compositionLocalOf<Animatable<Float, AnimationVector1D>?> { null }
+// pueda animar la misma transición de deslizar+desvanecer que usa AuthFlow entre pantallas,
+// antes de disparar el cambio de idioma (que recrea la Activity de golpe). Mientras dura ese
+// recreate mostramos un loader con el fondo normal del tema, para que nunca se vea una
+// pantalla negra/en blanco de golpe.
+private class LanguageTransition {
+    val alpha = Animatable(1f)
+    val offsetX = Animatable(0f)
+    var showLoader by mutableStateOf(false)
+}
+
+private val LocalLanguageTransition = compositionLocalOf<LanguageTransition?> { null }
 
 @Composable
 private fun FamiliaRadioApp(
@@ -512,11 +521,27 @@ private fun FamiliaRadioApp(
     var sessionActive by remember { mutableStateOf(true) }
     var statusMessage by remember { mutableStateOf("") }
     var retryCount by remember { mutableStateOf(0) }
-    val languageFadeAlpha = remember { Animatable(1f) }
+    val languageTransition = remember { LanguageTransition() }
+
+    // Al entrar (arranque normal o recién recreada la Activity por un cambio de idioma),
+    // el contenido se desliza y desvanece hacia adentro — la misma sensación que
+    // AuthFlow usa entre sus pantallas, para que el cambio de idioma no sea un corte seco.
+    LaunchedEffect(Unit) {
+        languageTransition.alpha.snapTo(0f)
+        languageTransition.offsetX.snapTo(60f)
+        coroutineScope {
+            launch { languageTransition.alpha.animateTo(1f, tween(260)) }
+            launch { languageTransition.offsetX.animateTo(0f, tween(260)) }
+        }
+    }
 
     MaterialTheme(colorScheme = colorsForRole(membership?.role)) {
-      CompositionLocalProvider(LocalLanguageFadeAlpha provides languageFadeAlpha) {
-        Surface(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = languageFadeAlpha.value }) {
+      CompositionLocalProvider(LocalLanguageTransition provides languageTransition) {
+        Box(modifier = Modifier.fillMaxSize()) {
+        Surface(modifier = Modifier.fillMaxSize().graphicsLayer {
+            alpha = languageTransition.alpha.value
+            translationX = languageTransition.offsetX.value
+        }) {
             if (!authenticated) {
                 AuthFlow(
                     callbacks = authCallbacks,
@@ -604,6 +629,15 @@ private fun FamiliaRadioApp(
                     sessionActive = false
                 }
             )
+        }
+        if (languageTransition.showLoader) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
         }
       }
     }
@@ -838,16 +872,25 @@ private fun IdleScreen(
 @Composable
 fun LanguageToggle() {
     val context = LocalContext.current
-    val fadeAlpha = LocalLanguageFadeAlpha.current
+    val transition = LocalLanguageTransition.current
     val scope = rememberCoroutineScope()
+    // Se lee una sola vez por composición: alcanza para decidir si el idioma tocado ya es
+    // el actual, y evitar así un recreate (y toda la animación) totalmente innecesarios.
+    val currentLanguage = remember { context.resources.configuration.locales[0].language }
     val changeLanguage: (String) -> Unit = { tag ->
-        if (fadeAlpha != null) {
-            scope.launch {
-                fadeAlpha.animateTo(0f, animationSpec = tween(180))
+        if (tag != currentLanguage) {
+            if (transition != null) {
+                transition.showLoader = true
+                scope.launch {
+                    coroutineScope {
+                        launch { transition.alpha.animateTo(0f, tween(200)) }
+                        launch { transition.offsetX.animateTo(-60f, tween(200)) }
+                    }
+                    setAppLanguage(context, tag)
+                }
+            } else {
                 setAppLanguage(context, tag)
             }
-        } else {
-            setAppLanguage(context, tag)
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
