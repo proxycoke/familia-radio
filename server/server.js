@@ -121,6 +121,40 @@ async function sendResetEmail(toEmail, code) {
 
 const EMAIL_OTP_TTL_MS = 5 * 60 * 1000;
 
+// Frena consultas repetidas mientras el usuario escribe/sale del campo en el registro.
+const checkAvailabilityLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiados intentos, probá de nuevo en un rato' }
+});
+
+// Validación en tiempo real del formulario de registro: si el correo/teléfono ya
+// pertenece a una cuenta de Firebase, avisamos antes de que el usuario intente enviar
+// el formulario completo.
+app.get('/auth/check-email', checkAvailabilityLimiter, async (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).json({ error: 'Falta el correo' });
+  try {
+    await adminAuth.getUserByEmail(email);
+    res.json({ available: false });
+  } catch (e) {
+    res.json({ available: true });
+  }
+});
+
+app.get('/auth/check-phone', checkAvailabilityLimiter, async (req, res) => {
+  const phone = req.query.phone;
+  if (!phone) return res.status(400).json({ error: 'Falta el teléfono' });
+  try {
+    await adminAuth.getUserByPhoneNumber(phone);
+    res.json({ available: false });
+  } catch (e) {
+    res.json({ available: true });
+  }
+});
+
 app.post('/auth/recovery-options', recoveryLimiter, async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: 'Falta el correo' });
