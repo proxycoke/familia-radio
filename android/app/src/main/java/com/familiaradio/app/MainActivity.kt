@@ -245,6 +245,10 @@ class MainActivity : ComponentActivity() {
                     verifyEmailOtp = { email, code, onSuccess, onError -> verifyEmailOtp(email, code, onSuccess, onError) },
                     resetPasswordViaEmail = { email, code, newPassword, onSuccess, onError ->
                         resetPasswordViaEmail(email, code, newPassword, onSuccess, onError)
+                    },
+                    hasVerifiedPhone = { authManager.hasVerifiedPhone },
+                    linkPendingPhone = { onSuccess, onError ->
+                        authManager.linkPendingPhoneToCurrentUser(onSuccess, onError)
                     }
                 ),
                 loadMembership = { MembershipStore.load(applicationContext) },
@@ -718,8 +722,6 @@ private fun FamilySetupScreen(
             }
 
             SetupStep.CREATE_ROLE -> {
-                BackButton(onBack = { errorMessage = ""; step = SetupStep.CHOOSE })
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.setup_choose_role_title), fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(32.dp))
                 RoleCard(
@@ -770,8 +772,6 @@ private fun FamilySetupScreen(
             }
 
             SetupStep.JOIN_CODE -> {
-                BackButton(onBack = { errorMessage = ""; step = SetupStep.CHOOSE })
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.join_code_prompt), fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(24.dp))
                 OutlinedTextField(
@@ -791,8 +791,6 @@ private fun FamilySetupScreen(
             }
 
             SetupStep.JOIN_ROLE -> {
-                BackButton(onBack = { errorMessage = ""; step = SetupStep.JOIN_CODE })
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(stringResource(R.string.setup_choose_role_title), fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(32.dp))
                 RoleCard(
@@ -820,6 +818,18 @@ private fun FamilySetupScreen(
                 )
                 SetupStatus(loading, errorMessage)
             }
+        }
+    }
+    // Regresar va siempre fijo arriba a la izquierda con el mismo padding que el resto de
+    // la app (ver CenteredScreenWithBack en AuthScreens.kt) — nunca como parte del
+    // contenido centrado, para que no flote en un lugar distinto según cuánto contenido
+    // tenga cada paso.
+    if (step == SetupStep.CREATE_ROLE || step == SetupStep.JOIN_CODE || step == SetupStep.JOIN_ROLE) {
+        Row(modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 16.dp, vertical = 12.dp)) {
+            BackButton(onBack = {
+                errorMessage = ""
+                step = if (step == SetupStep.JOIN_ROLE) SetupStep.JOIN_CODE else SetupStep.CHOOSE
+            })
         }
     }
     // Provisorio: "home" mientras no hay una pantalla de ajustes — Cerrar sesión solo

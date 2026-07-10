@@ -53,7 +53,9 @@ class AuthCallbacks(
     val fetchRecoveryOptions: (String, (phone: String?, phoneMasked: String?, emailMasked: String) -> Unit, (String) -> Unit) -> Unit,
     val sendEmailOtp: (String, () -> Unit, (String) -> Unit) -> Unit,
     val verifyEmailOtp: (String, String, () -> Unit, (String) -> Unit) -> Unit,
-    val resetPasswordViaEmail: (String, String, String, () -> Unit, (String) -> Unit) -> Unit
+    val resetPasswordViaEmail: (String, String, String, () -> Unit, (String) -> Unit) -> Unit,
+    val hasVerifiedPhone: () -> Boolean,
+    val linkPendingPhone: (() -> Unit, (String) -> Unit) -> Unit
 )
 
 // Con "Recordar mis datos" tildado, guardamos el correo para que la próxima vez el
@@ -150,7 +152,7 @@ private fun AcceptRow(
  * Column centrada, termina flotando en el medio de la pantalla junto al resto).
  */
 @Composable
-private fun CenteredScreenWithBack(
+fun CenteredScreenWithBack(
     onBack: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -172,7 +174,8 @@ private enum class AuthStep {
     REGISTER_FORM, REGISTER_OTP, REGISTER_SUCCESS,
     FORGOT_IDENTIFY, FORGOT_CHOOSE_METHOD,
     FORGOT_PHONE_OTP, FORGOT_EMAIL_OTP,
-    FORGOT_NEW_PASSWORD, FORGOT_SUCCESS
+    FORGOT_NEW_PASSWORD, FORGOT_SUCCESS,
+    GOOGLE_VERIFY_PHONE, GOOGLE_VERIFY_PHONE_OTP
 }
 
 private enum class RecoveryMethod { PHONE, EMAIL }
@@ -182,6 +185,9 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
     var step by remember { mutableStateOf(AuthStep.LOGIN) }
     var loading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+
+    // Teléfono que se está vinculando a una cuenta de Google recién autenticada.
+    var googleVerifyPhone by remember { mutableStateOf("") }
 
     // Datos que se van juntando a lo largo del registro.
     var pendingPhone by remember { mutableStateOf("") }
@@ -255,7 +261,13 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
                 },
                 onGoogleLogin = {
                     loading = true; errorMessage = ""
-                    callbacks.signInWithGoogle({ loading = false; onAuthenticated() }, { e -> loading = false; errorMessage = e })
+                    callbacks.signInWithGoogle({
+                        loading = false
+                        // El backend exige teléfono verificado (ver requireVerifiedPhone); Google
+                        // por sí solo no lo trae, así que si la cuenta todavía no tiene uno
+                        // vinculado hacemos ese paso extra antes de dar por terminado el login.
+                        if (callbacks.hasVerifiedPhone()) onAuthenticated() else step = AuthStep.GOOGLE_VERIFY_PHONE
+                    }, { e -> loading = false; errorMessage = e })
                 },
                 onRegister = { errorMessage = ""; step = AuthStep.REGISTER_FORM },
                 onForgotPassword = { typedEmail ->
@@ -394,6 +406,48 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
                 onTimeout = {
                     callbacks.signOut()
                     step = AuthStep.LOGIN
+                }
+            )
+
+            AuthStep.GOOGLE_VERIFY_PHONE -> VerifyPhoneScreen(
+                loading = loading,
+                errorMessage = errorMessage,
+                onBack = {
+                    // No dejamos una sesión de Google a medio autenticar: si cancela acá,
+                    // cerramos sesión y volvemos al login limpio.
+                    callbacks.signOut()
+                    errorMessage = ""
+                    step = AuthStep.LOGIN
+                },
+                onSubmit = { phone ->
+                    googleVerifyPhone = phone
+                    loading = true; errorMessage = ""
+                    callbacks.sendPhoneCode(
+                        phone,
+                        { loading = false; step = AuthStep.GOOGLE_VERIFY_PHONE_OTP },
+                        {
+                            loading = false
+                            callbacks.linkPendingPhone({ onAuthenticated() }, { e -> errorMessage = e; step = AuthStep.LOGIN })
+                        },
+                        { e -> loading = false; errorMessage = e }
+                    )
+                }
+            )
+
+            AuthStep.GOOGLE_VERIFY_PHONE_OTP -> OtpEntryScreen(
+                title = stringResource(R.string.otp_title),
+                subtitle = stringResource(R.string.otp_subtitle, googleVerifyPhone),
+                loading = loading,
+                errorMessage = errorMessage,
+                onBack = { errorMessage = ""; step = AuthStep.GOOGLE_VERIFY_PHONE },
+                onConfirm = { code ->
+                    loading = true; errorMessage = ""
+                    callbacks.confirmPhoneCode(code, {
+                        callbacks.linkPendingPhone({ loading = false; onAuthenticated() }, { e -> loading = false; errorMessage = e })
+                    }, { e -> loading = false; errorMessage = e })
+                },
+                onResend = { onDone ->
+                    callbacks.sendPhoneCode(googleVerifyPhone, { onDone() }, { onDone() }, { onDone() })
                 }
             )
         }
@@ -769,11 +823,12 @@ private fun RegisterFormScreen(
         )
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 28.dp).padding(top = 48.dp, bottom = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) { BackButton(onBack = onBack) }
         Text(
             stringResource(R.string.register_form_title),
             fontSize = 20.sp,
@@ -900,6 +955,10 @@ private fun RegisterFormScreen(
         SetupStatus(loading = false, errorMessage = errorMessage)
         Spacer(modifier = Modifier.height(12.dp))
     }
+    Row(modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 16.dp, vertical = 12.dp)) {
+        BackButton(onBack = onBack)
+    }
+    }
 }
 
 @Composable
@@ -951,6 +1010,73 @@ private fun NewPasswordScreen(
         ) { Text(stringResource(R.string.action_change_password), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
         val displayError = if (mismatch) stringResource(R.string.error_passwords_dont_match) else errorMessage
         SetupStatus(loading, displayError)
+    }
+}
+
+// Se muestra después de un login con Google cuando la cuenta todavía no tiene un teléfono
+// vinculado — el backend lo exige para crear/unirse a una familia. Solo pide el número (a
+// diferencia del registro, acá el nombre/correo ya vienen de Google).
+@Composable
+private fun VerifyPhoneScreen(
+    loading: Boolean,
+    errorMessage: String,
+    onBack: () -> Unit,
+    onSubmit: (phone: String) -> Unit
+) {
+    var phoneNumber by remember { mutableStateOf("") }
+    CenteredScreenWithBack(onBack = onBack) {
+        Text("📱", fontSize = 48.sp)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            stringResource(R.string.verify_phone_title),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            stringResource(R.string.verify_phone_subtitle),
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(24.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = "+51",
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                label = { Text(" ") },
+                modifier = Modifier.width(72.dp)
+            )
+            OutlinedTextField(
+                value = phoneNumber,
+                onValueChange = { phoneNumber = it.filter { c -> c.isDigit() }.take(15) },
+                label = { Text(stringResource(R.string.phone_number_label)) },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Spacer(modifier = Modifier.height(24.dp))
+        Button(
+            onClick = { onSubmit("+51${phoneNumber.trim()}") },
+            enabled = !loading && phoneNumber.trim().length >= 6,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth().height(64.dp)
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Text(stringResource(R.string.action_send_code), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        SetupStatus(loading = false, errorMessage = errorMessage)
     }
 }
 

@@ -28,6 +28,10 @@ class AuthManager {
 
     val isAuthenticated: Boolean get() = auth.currentUser != null
 
+    // El backend exige un token con teléfono verificado (ver requireVerifiedPhone en el
+    // servidor) — un login por Google solo no trae eso, hay que vincular un teléfono aparte.
+    val hasVerifiedPhone: Boolean get() = auth.currentUser?.phoneNumber != null
+
     fun signInWithEmail(email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         auth.signInWithEmailAndPassword(email, password)
             .addOnSuccessListener { onSuccess() }
@@ -122,6 +126,24 @@ class AuthManager {
             .addOnFailureListener { e -> onError(e.message ?: "Código inválido") }
     }
 
+    // Vincula el teléfono recién verificado al usuario YA autenticado (por ejemplo, con
+    // Google) — a diferencia de completeRegistration(), acá no se crea ninguna cuenta nueva.
+    fun linkPendingPhoneToCurrentUser(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        val credential = pendingPhoneCredential
+        if (credential == null) {
+            onError("Verificá el código primero")
+            return
+        }
+        val user = auth.currentUser
+        if (user == null) {
+            onError("Sesión no encontrada")
+            return
+        }
+        user.linkWithCredential(credential)
+            .addOnSuccessListener { onSuccess() }
+            .addOnFailureListener { e -> onError(e.message ?: "No se pudo vincular el teléfono") }
+    }
+
     fun setNewPassword(newPassword: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         val user = auth.currentUser
         if (user == null) {
@@ -137,11 +159,13 @@ class AuthManager {
         auth.signOut()
     }
 
-    // Bloqueante: solo se debe llamar desde un hilo secundario.
+    // Bloqueante: solo se debe llamar desde un hilo secundario. Fuerza refresco (true) porque
+    // justo después de vincular un teléfono necesitamos que el token ya traiga phone_number —
+    // un token cacheado podría no reflejar el vínculo recién hecho.
     fun getIdTokenBlocking(): String? {
         val user = auth.currentUser ?: return null
         return try {
-            Tasks.await(user.getIdToken(false)).token
+            Tasks.await(user.getIdToken(true)).token
         } catch (e: Exception) {
             null
         }

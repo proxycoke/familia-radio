@@ -21,6 +21,9 @@
     <string name="otp_subtitle">Ingresa el código que se ha enviado a %1$s para culminar el registro</string>
     <string name="otp_title_recovery">Cambiar contraseña</string>
     <string name="otp_subtitle_recovery">Ingresa el código que se ha enviado al correo %1$s para recuperar tu contraseña</string>
+    <string name="verify_phone_title">Verifica tu número</string>
+    <string name="verify_phone_subtitle">Necesitamos tu teléfono para crear o unirte a una familia</string>
+    <string name="action_send_code">Enviar código</string>
     <string name="action_confirm_code">Confirmar</string>
     <string name="action_resend_code">Reenviar código</string>
     <string name="resend_code_success">¡Código reenviado!</string>
