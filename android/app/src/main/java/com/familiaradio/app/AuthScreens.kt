@@ -201,6 +201,21 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
         }, { e -> loading = false; errorMessage = e })
     }
 
+    // El mockup no tiene una pantalla separada para "ingresa tu correo": desde el login
+    // se va directo a elegir el método (SMS/correo) usando el correo que el usuario ya
+    // escribió ahí. Solo si ese campo está vacío mostramos IdentifyEmailScreen como respaldo.
+    fun startRecovery(email: String) {
+        loading = true; errorMessage = ""
+        callbacks.fetchRecoveryOptions(email, { phone, phoneMasked, emailMasked ->
+            loading = false
+            recoveryEmail = email
+            recoveryPhone = phone ?: ""
+            recoveryPhoneMasked = phoneMasked ?: ""
+            recoveryEmailMasked = emailMasked
+            step = AuthStep.FORGOT_CHOOSE_METHOD
+        }, { e -> loading = false; errorMessage = e })
+    }
+
     AnimatedContent(
         targetState = step,
         transitionSpec = {
@@ -222,7 +237,10 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
                     callbacks.signInWithGoogle({ loading = false; onAuthenticated() }, { e -> loading = false; errorMessage = e })
                 },
                 onRegister = { errorMessage = ""; step = AuthStep.REGISTER_FORM },
-                onForgotPassword = { errorMessage = ""; step = AuthStep.FORGOT_IDENTIFY }
+                onForgotPassword = { typedEmail ->
+                    errorMessage = ""
+                    if (typedEmail.isBlank()) step = AuthStep.FORGOT_IDENTIFY else startRecovery(typedEmail)
+                }
             )
 
             AuthStep.REGISTER_FORM -> RegisterFormScreen(
@@ -267,17 +285,7 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
                 loading = loading,
                 errorMessage = errorMessage,
                 onBack = { errorMessage = ""; step = AuthStep.LOGIN },
-                onNext = { email ->
-                    loading = true; errorMessage = ""
-                    callbacks.fetchRecoveryOptions(email, { phone, phoneMasked, emailMasked ->
-                        loading = false
-                        recoveryEmail = email
-                        recoveryPhone = phone ?: ""
-                        recoveryPhoneMasked = phoneMasked ?: ""
-                        recoveryEmailMasked = emailMasked
-                        step = AuthStep.FORGOT_CHOOSE_METHOD
-                    }, { e -> loading = false; errorMessage = e })
-                }
+                onNext = { email -> startRecovery(email) }
             )
 
             AuthStep.FORGOT_CHOOSE_METHOD -> ChooseRecoveryMethodScreen(
@@ -285,7 +293,7 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
                 errorMessage = errorMessage,
                 phoneMasked = recoveryPhoneMasked,
                 emailMasked = recoveryEmailMasked,
-                onBack = { errorMessage = ""; step = AuthStep.FORGOT_IDENTIFY },
+                onBack = { errorMessage = ""; step = AuthStep.LOGIN },
                 onChooseSms = {
                     recoveryMethod = RecoveryMethod.PHONE
                     loading = true; errorMessage = ""
@@ -308,7 +316,7 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
 
             AuthStep.FORGOT_PHONE_OTP -> OtpEntryScreen(
                 title = stringResource(R.string.otp_title_recovery),
-                subtitle = stringResource(R.string.otp_subtitle_recovery, recoveryPhoneMasked),
+                subtitle = stringResource(R.string.otp_subtitle, recoveryPhoneMasked),
                 loading = loading,
                 errorMessage = errorMessage,
                 onBack = { errorMessage = ""; step = AuthStep.FORGOT_CHOOSE_METHOD },
@@ -378,7 +386,7 @@ private fun LoginScreen(
     onLogin: (String, String) -> Unit,
     onGoogleLogin: () -> Unit,
     onRegister: () -> Unit,
-    onForgotPassword: () -> Unit
+    onForgotPassword: (String) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -428,7 +436,7 @@ private fun LoginScreen(
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { Text(stringResource(R.string.action_login), fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = onForgotPassword) {
+        TextButton(onClick = { onForgotPassword(email.trim()) }) {
             Text(stringResource(R.string.login_forgot_password), fontSize = 13.sp)
         }
 

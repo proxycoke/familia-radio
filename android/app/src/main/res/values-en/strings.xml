@@ -20,7 +20,7 @@
     <string name="otp_title">Confirmation</string>
     <string name="otp_subtitle">Enter the code sent to %1$s to complete your registration</string>
     <string name="otp_title_recovery">Change password</string>
-    <string name="otp_subtitle_recovery">Enter the code sent to %1$s to recover your password</string>
+    <string name="otp_subtitle_recovery">Enter the code sent to your email %1$s to recover your password</string>
     <string name="action_confirm_code">Confirm</string>
     <string name="action_resend_code">Resend code</string>
     <string name="resend_code_success">Code resent!</string>
