@@ -156,13 +156,12 @@ class MainActivity : ComponentActivity() {
             val account = task.getResult(ApiException::class.java)
             onGoogleSignInResult?.invoke(account.idToken, null)
         } catch (e: ApiException) {
-            // Código 12501 = el usuario canceló el selector de cuenta de Google;
-            // no es un error real, así que no le mostramos nada.
-            if (e.statusCode != com.google.android.gms.common.api.CommonStatusCodes.CANCELED) {
-                onGoogleSignInResult?.invoke(null, e.message ?: "Google sign-in falló")
-            } else {
-                onGoogleSignInResult?.invoke(null, "")
-            }
+            // 12501 (GoogleSignInStatusCodes.SIGN_IN_CANCELLED) = el usuario canceló el
+            // selector de cuenta; 13 (CommonStatusCodes.CANCELED) puede darse en otros
+            // casos de cancelación. Ninguno de los dos es un error real que mostrar.
+            val cancelled = e.statusCode == com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes.SIGN_IN_CANCELLED ||
+                e.statusCode == com.google.android.gms.common.api.CommonStatusCodes.CANCELED
+            onGoogleSignInResult?.invoke(null, if (cancelled) "" else (e.message ?: "Google sign-in falló"))
         }
     }
 
@@ -427,10 +426,16 @@ class MainActivity : ComponentActivity() {
         val body = JSONObject().apply { put("email", email) }
         httpPostJson("/auth/recovery-options", body, onResult = { code, responseBody ->
             if (code == 200) {
-                val json = JSONObject(responseBody)
-                val phone = if (json.has("phone") && !json.isNull("phone")) json.getString("phone") else null
-                val phoneMasked = if (json.has("phoneMasked") && !json.isNull("phoneMasked")) json.getString("phoneMasked") else null
-                onResult(phone, phoneMasked, json.getString("emailMasked"))
+                runCatching {
+                    val json = JSONObject(responseBody)
+                    val phone = if (json.has("phone") && !json.isNull("phone")) json.getString("phone") else null
+                    val phoneMasked = if (json.has("phoneMasked") && !json.isNull("phoneMasked")) json.getString("phoneMasked") else null
+                    Triple(phone, phoneMasked, json.getString("emailMasked"))
+                }.onSuccess { (phone, phoneMasked, emailMasked) ->
+                    onResult(phone, phoneMasked, emailMasked)
+                }.onFailure {
+                    onError("No se pudo leer la respuesta del servidor")
+                }
             } else {
                 onError(errorMessageFrom(responseBody, "No encontramos una cuenta con ese correo"))
             }

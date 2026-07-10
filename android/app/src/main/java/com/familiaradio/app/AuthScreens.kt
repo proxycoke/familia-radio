@@ -460,7 +460,17 @@ private fun LoginScreen(
             enabled = !loading && email.isNotBlank() && password.isNotBlank(),
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth().height(56.dp)
-        ) { Text(stringResource(R.string.action_login), fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+        ) {
+            if (loading) {
+                CircularProgressIndicator(
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(22.dp)
+                )
+            } else {
+                Text(stringResource(R.string.action_login), fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            }
+        }
         Spacer(modifier = Modifier.height(8.dp))
         TextButton(onClick = {
             if (rememberMe && email.isNotBlank()) RememberedEmailStore.save(context, email.trim())
@@ -469,7 +479,9 @@ private fun LoginScreen(
             Text(stringResource(R.string.login_forgot_password), fontSize = 13.sp)
         }
 
-        SetupStatus(loading, errorMessage)
+        // El loader del botón ya cubre el estado "loading"; acá solo mostramos el error,
+        // para que no aparezca un segundo spinner que empuje el resto del contenido hacia abajo.
+        SetupStatus(loading = false, errorMessage = errorMessage)
 
         Spacer(modifier = Modifier.height(16.dp))
         Text(stringResource(R.string.login_or_divider), fontSize = 13.sp)
@@ -542,31 +554,60 @@ private fun ChooseRecoveryMethodScreen(
     onChooseSms: () -> Unit,
     onChooseEmail: () -> Unit
 ) {
-    CenteredScreenWithBack(onBack = onBack) {
-        Text(
-            stringResource(R.string.forgot_password_title),
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            stringResource(R.string.forgot_password_choose_method),
-            fontSize = 14.sp,
-            textAlign = TextAlign.Center
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        if (phoneMasked.isNotBlank()) {
-            RecoveryOptionCard(emoji = "📱", label = stringResource(R.string.recovery_via_sms, phoneMasked), onClick = onChooseSms, enabled = !loading)
-            Spacer(modifier = Modifier.height(12.dp))
+    // Título/subtítulo van fijos cerca del borde superior y las 2 tarjetas se centran
+    // en el espacio restante (spacers con weight arriba y abajo de ellas). El loader
+    // se dibuja DENTRO de la tarjeta tocada en vez de agregarse debajo, así nada más
+    // en la pantalla se mueve mientras se espera la respuesta del servidor.
+    var tappedMethod by remember { mutableStateOf<RecoveryMethod?>(null) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 64.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                stringResource(R.string.forgot_password_title),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                stringResource(R.string.forgot_password_choose_method),
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            if (phoneMasked.isNotBlank()) {
+                RecoveryOptionCard(
+                    emoji = "📱",
+                    label = stringResource(R.string.recovery_via_sms, phoneMasked),
+                    onClick = { tappedMethod = RecoveryMethod.PHONE; onChooseSms() },
+                    enabled = !loading,
+                    loading = loading && tappedMethod == RecoveryMethod.PHONE
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            RecoveryOptionCard(
+                emoji = "✉️",
+                label = stringResource(R.string.recovery_via_email, emailMasked),
+                onClick = { tappedMethod = RecoveryMethod.EMAIL; onChooseEmail() },
+                enabled = !loading,
+                loading = loading && tappedMethod == RecoveryMethod.EMAIL
+            )
+            if (errorMessage.isNotBlank()) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(errorMessage, fontSize = 15.sp, color = MaterialTheme.colorScheme.error, textAlign = TextAlign.Center)
+            }
+            Spacer(modifier = Modifier.weight(1f))
         }
-        RecoveryOptionCard(emoji = "✉️", label = stringResource(R.string.recovery_via_email, emailMasked), onClick = onChooseEmail, enabled = !loading)
-        SetupStatus(loading, errorMessage)
+        Row(modifier = Modifier.align(Alignment.TopStart).padding(horizontal = 16.dp, vertical = 12.dp)) {
+            BackButton(onBack = onBack)
+        }
     }
 }
 
 @Composable
-private fun RecoveryOptionCard(emoji: String, label: String, onClick: () -> Unit, enabled: Boolean) {
+private fun RecoveryOptionCard(emoji: String, label: String, onClick: () -> Unit, enabled: Boolean, loading: Boolean = false) {
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
@@ -574,9 +615,13 @@ private fun RecoveryOptionCard(emoji: String, label: String, onClick: () -> Unit
         modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-            Text(emoji, fontSize = 24.sp)
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            if (loading) {
+                CircularProgressIndicator(strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+            } else {
+                Text(emoji, fontSize = 24.sp)
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(label, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
