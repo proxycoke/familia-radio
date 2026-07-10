@@ -136,6 +136,21 @@ private object MembershipStore {
     }
 }
 
+// El idioma ahora se elige una única vez, en la primera pantalla que ve el usuario tras
+// instalar la app (ver LanguageOnboardingScreen) — ya no hay forma de cambiarlo desde
+// dentro de la app hasta que exista una sección de Ajustes.
+private object LanguagePrefStore {
+    private const val PREFS = "familia_radio_prefs"
+    private const val KEY = "language_selected"
+
+    fun isSelected(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
+
+    fun markSelected(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, true).apply()
+    }
+}
+
 /**
  * MVP de walkie-talkie: dos roles se unen al mismo canal de voz Agora.
  * No hay "llamada" ni "contestar": el canal siempre está conectado,
@@ -249,7 +264,9 @@ class MainActivity : ComponentActivity() {
                     hasVerifiedPhone = { authManager.hasVerifiedPhone },
                     linkPendingPhone = { onSuccess, onError ->
                         authManager.linkPendingPhoneToCurrentUser(onSuccess, onError)
-                    }
+                    },
+                    checkEmailAvailable = { email, onResult -> checkEmailAvailability(email, onResult) },
+                    checkPhoneAvailable = { phone, onResult -> checkPhoneAvailability(phone, onResult) }
                 ),
                 loadMembership = { MembershipStore.load(applicationContext) },
                 saveMembership = { membership ->
@@ -485,6 +502,24 @@ class MainActivity : ComponentActivity() {
     private fun errorMessageFrom(responseBody: String, fallback: String): String =
         runCatching { JSONObject(responseBody).getString("error") }.getOrDefault(fallback)
 
+    // Validación en tiempo real del registro (onBlur en los campos de correo/teléfono).
+    // Ante cualquier falla de red devolvemos "disponible" para no bloquear el registro
+    // por un problema transitorio del servidor — la validación real y definitiva sigue
+    // siendo la que hace Firebase al crear la cuenta.
+    private fun checkEmailAvailability(email: String, onResult: (Boolean) -> Unit) {
+        val encoded = java.net.URLEncoder.encode(email, "UTF-8")
+        httpGet("/auth/check-email?email=$encoded", onResult = { code, body ->
+            onResult(if (code == 200) runCatching { JSONObject(body).getBoolean("available") }.getOrDefault(true) else true)
+        }, onError = { onResult(true) })
+    }
+
+    private fun checkPhoneAvailability(phone: String, onResult: (Boolean) -> Unit) {
+        val encoded = java.net.URLEncoder.encode(phone, "UTF-8")
+        httpGet("/auth/check-phone?phone=$encoded", onResult = { code, body ->
+            onResult(if (code == 200) runCatching { JSONObject(body).getBoolean("available") }.getOrDefault(true) else true)
+        }, onError = { onResult(true) })
+    }
+
     override fun onDestroy() {
         if (isServiceBound) {
             unbindService(serviceConnection)
@@ -497,11 +532,10 @@ class MainActivity : ComponentActivity() {
 
 private enum class Role { ABUELA, CUIDADOR }
 
-// Compartido entre pantallas para que LanguageToggle (usado en varios archivos/composables)
-// pueda animar la misma transición de deslizar+desvanecer que usa AuthFlow entre pantallas,
-// antes de disparar el cambio de idioma (que recrea la Activity de golpe). Mientras dura ese
-// recreate mostramos un loader con el fondo normal del tema, para que nunca se vea una
-// pantalla negra/en blanco de golpe.
+// Compartido entre pantallas para animar la misma transición de deslizar+desvanecer que usa
+// AuthFlow entre pantallas, antes de disparar el cambio de idioma (que recrea la Activity de
+// golpe). Mientras dura ese recreate mostramos un loader con el fondo normal del tema, para
+// que nunca se vea una pantalla negra/en blanco de golpe.
 private class LanguageTransition {
     val alpha = Animatable(1f)
     val offsetX = Animatable(0f)
@@ -532,7 +566,9 @@ private fun FamiliaRadioApp(
     var sessionActive by remember { mutableStateOf(true) }
     var statusMessage by remember { mutableStateOf("") }
     var retryCount by remember { mutableStateOf(0) }
+    var languageChosen by remember { mutableStateOf(LanguagePrefStore.isSelected(context)) }
     val languageTransition = remember { LanguageTransition() }
+    val languageScope = rememberCoroutineScope()
 
     // Al entrar (arranque normal o recién recreada la Activity por un cambio de idioma),
     // el contenido se desliza y desvanece hacia adentro — la misma sensación que
@@ -556,6 +592,20 @@ private fun FamiliaRadioApp(
             // Antes esto era un corte seco (varios "return@Surface" intercambiando contenido
             // sin animar). Ahora el paso de login a home (y viceversa, al cerrar sesión) usa
             // el mismo deslizar+desvanecer que el resto de transiciones de la app.
+            if (!languageChosen) {
+                LanguageOnboardingScreen(onContinue = { tag ->
+                    LanguagePrefStore.markSelected(context)
+                    languageTransition.showLoader = true
+                    languageScope.launch {
+                        coroutineScope {
+                            launch { languageTransition.alpha.animateTo(0f, tween(200)) }
+                            launch { languageTransition.offsetX.animateTo(-60f, tween(200)) }
+                        }
+                        setAppLanguage(context, tag)
+                        languageChosen = true
+                    }
+                })
+            } else {
             AnimatedContent(
                 targetState = authenticated,
                 transitionSpec = {
@@ -660,6 +710,7 @@ private fun FamiliaRadioApp(
                         }
                     }
                 }
+            }
             }
         }
         if (languageTransition.showLoader) {
@@ -927,36 +978,51 @@ private fun IdleScreen(
     }
 }
 
+// Única pantalla donde se elige idioma: se muestra una sola vez, antes del login, la
+// primera vez que se abre la app tras instalarla (ver LanguagePrefStore). No hay forma
+// de volver a cambiarlo desde acá — quedará en una futura sección de Ajustes.
 @Composable
-fun LanguageToggle() {
-    val context = LocalContext.current
-    val transition = LocalLanguageTransition.current
-    val scope = rememberCoroutineScope()
-    // Se lee una sola vez por composición: alcanza para decidir si el idioma tocado ya es
-    // el actual, y evitar así un recreate (y toda la animación) totalmente innecesarios.
-    val currentLanguage = remember { context.resources.configuration.locales[0].language }
-    val changeLanguage: (String) -> Unit = { tag ->
-        if (tag != currentLanguage) {
-            if (transition != null) {
-                transition.showLoader = true
-                scope.launch {
-                    coroutineScope {
-                        launch { transition.alpha.animateTo(0f, tween(200)) }
-                        launch { transition.offsetX.animateTo(-60f, tween(200)) }
-                    }
-                    setAppLanguage(context, tag)
-                }
-            } else {
-                setAppLanguage(context, tag)
-            }
-        }
+private fun LanguageOnboardingScreen(onContinue: (String) -> Unit) {
+    var selected by remember { mutableStateOf<String?>(null) }
+    Column(
+        modifier = Modifier.fillMaxSize().padding(28.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text("HablaPe", fontSize = 32.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Selecciona tu idioma / Select your language", fontSize = 14.sp, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(32.dp))
+        LanguageOptionCard(label = "Español", selected = selected == "es", onClick = { selected = "es" })
+        Spacer(modifier = Modifier.height(12.dp))
+        LanguageOptionCard(label = "English", selected = selected == "en", onClick = { selected = "en" })
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
+            onClick = { selected?.let(onContinue) },
+            enabled = selected != null,
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth().height(64.dp)
+        ) { Text("Continuar / Continue", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        TextButton(onClick = { changeLanguage("es") }) {
-            Text(stringResource(R.string.language_spanish), fontSize = 13.sp)
-        }
-        TextButton(onClick = { changeLanguage("en") }) {
-            Text(stringResource(R.string.language_english), fontSize = 13.sp)
+}
+
+@Composable
+private fun LanguageOptionCard(label: String, selected: Boolean, onClick: () -> Unit) {
+    OutlinedButton(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        colors = if (selected) {
+            ButtonDefaults.outlinedButtonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+        } else {
+            ButtonDefaults.outlinedButtonColors()
+        },
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            if (selected) {
+                Text("✓", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            }
         }
     }
 }

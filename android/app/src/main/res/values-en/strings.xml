@@ -21,6 +21,7 @@
     <string name="otp_subtitle">Enter the code sent to %1$s to complete your registration</string>
     <string name="otp_title_recovery">Change password</string>
     <string name="otp_subtitle_recovery">Enter the code sent to your email %1$s to recover your password</string>
+    <string name="otp_subtitle_recovery_phone">Enter the code sent to %1$s to recover your password</string>
     <string name="verify_phone_title">Verify your number</string>
     <string name="verify_phone_subtitle">We need your phone number to create or join a family</string>
     <string name="action_send_code">Send code</string>
@@ -49,6 +50,9 @@
     <string name="action_register">Continue</string>
     <string name="register_success_message">You\'re registered! You can start using the app now, you\'ll be redirected to the home screen in a few seconds</string>
     <string name="error_passwords_dont_match">Passwords don\'t match</string>
+    <string name="error_email_taken">Email already registered</string>
+    <string name="error_phone_taken">Phone already registered</string>
+    <string name="otp_wrong_code">Incorrect code, try again</string>
 
     <!-- Forgot password -->
     <string name="forgot_password_title">Recover password</string>
@@ -113,10 +117,6 @@
     <string name="notification_channel_description">Keeps the family radio connected in the background</string>
     <string name="notification_title_active">HablaPe active</string>
     <string name="notification_text_listening">Listening to the family radio</string>
-
-    <!-- Language selector -->
-    <string name="language_spanish">Español</string>
-    <string name="language_english">English</string>
 
     <string-array name="months">
         <item>January</item>

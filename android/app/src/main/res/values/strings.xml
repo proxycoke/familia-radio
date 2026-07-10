@@ -21,6 +21,7 @@
     <string name="otp_subtitle">Ingresa el código que se ha enviado a %1$s para culminar el registro</string>
     <string name="otp_title_recovery">Cambiar contraseña</string>
     <string name="otp_subtitle_recovery">Ingresa el código que se ha enviado al correo %1$s para recuperar tu contraseña</string>
+    <string name="otp_subtitle_recovery_phone">Ingresa el código que se ha enviado a %1$s para recuperar tu contraseña</string>
     <string name="verify_phone_title">Verifica tu número</string>
     <string name="verify_phone_subtitle">Necesitamos tu teléfono para crear o unirte a una familia</string>
     <string name="action_send_code">Enviar código</string>
@@ -49,6 +50,9 @@
     <string name="action_register">Continuar</string>
     <string name="register_success_message">¡Ya estás registrad@! Ya puedes empezar a usar la aplicación, serás redirigido al inicio en unos segundos</string>
     <string name="error_passwords_dont_match">Las contraseñas no coinciden</string>
+    <string name="error_email_taken">Correo ya registrado</string>
+    <string name="error_phone_taken">Teléfono ya registrado</string>
+    <string name="otp_wrong_code">Código incorrecto, inténtalo nuevamente</string>
 
     <!-- Recuperar contraseña -->
     <string name="forgot_password_title">Recuperar contraseña</string>
@@ -113,10 +117,6 @@
     <string name="notification_channel_description">Mantiene el radio familiar conectado en segundo plano</string>
     <string name="notification_title_active">HablaPe activo</string>
     <string name="notification_text_listening">Escuchando al radio familiar</string>
-
-    <!-- Selector de idioma -->
-    <string name="language_spanish">Español</string>
-    <string name="language_english">English</string>
 
     <string-array name="months">
         <item>Enero</item>

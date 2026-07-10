@@ -4,6 +4,7 @@ import android.app.Activity
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.FirebaseException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.auth.PhoneAuthCredential
 import com.google.firebase.auth.PhoneAuthOptions
@@ -20,6 +21,13 @@ import java.util.concurrent.TimeUnit
  * y después cambiar la contraseña de esa misma cuenta).
  */
 class AuthManager {
+    companion object {
+        // Sentinel devuelto en vez del mensaje crudo de Firebase cuando el código OTP
+        // ingresado es incorrecto — la UI (que sí tiene acceso a stringResource) lo
+        // traduce al mensaje amigable en el idioma correspondiente.
+        const val ERR_INVALID_OTP = "__ERR_INVALID_OTP__"
+    }
+
     private val auth = FirebaseAuth.getInstance()
     private var verificationId: String? = null
     private var pendingPhoneCredential: PhoneAuthCredential? = null
@@ -85,6 +93,14 @@ class AuthManager {
         PhoneAuthProvider.verifyPhoneNumber(builder.build())
     }
 
+    // La validación real del código OTP no pasa acá (confirmPhoneCode solo arma el
+    // credential) sino en el signInWithCredential/linkWithCredential que se hace después,
+    // así que ahí es donde Firebase avisa si el código estaba mal.
+    private fun mapPhoneError(e: Exception, fallback: String): String {
+        val code = (e as? FirebaseAuthException)?.errorCode
+        return if (code == "ERROR_INVALID_VERIFICATION_CODE") ERR_INVALID_OTP else (e.message ?: fallback)
+    }
+
     // Confirma el código y lo deja "pendiente" para el paso siguiente (crear cuenta o cambiar contraseña).
     fun confirmPhoneCode(code: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         val id = verificationId
@@ -107,7 +123,7 @@ class AuthManager {
             .addOnSuccessListener {
                 auth.currentUser?.linkWithCredential(phoneCredential)
                     ?.addOnSuccessListener { onSuccess() }
-                    ?.addOnFailureListener { e -> onError(e.message ?: "No se pudo vincular el teléfono") }
+                    ?.addOnFailureListener { e -> onError(mapPhoneError(e, "No se pudo vincular el teléfono")) }
                     ?: onError("No se pudo crear la cuenta")
             }
             .addOnFailureListener { e -> onError(e.message ?: "No se pudo crear la cuenta") }
@@ -123,7 +139,7 @@ class AuthManager {
         }
         auth.signInWithCredential(credential)
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { e -> onError(e.message ?: "Código inválido") }
+            .addOnFailureListener { e -> onError(mapPhoneError(e, "Código inválido")) }
     }
 
     // Vincula el teléfono recién verificado al usuario YA autenticado (por ejemplo, con
@@ -141,7 +157,7 @@ class AuthManager {
         }
         user.linkWithCredential(credential)
             .addOnSuccessListener { onSuccess() }
-            .addOnFailureListener { e -> onError(e.message ?: "No se pudo vincular el teléfono") }
+            .addOnFailureListener { e -> onError(mapPhoneError(e, "No se pudo vincular el teléfono")) }
     }
 
     fun setNewPassword(newPassword: String, onSuccess: () -> Unit, onError: (String) -> Unit) {

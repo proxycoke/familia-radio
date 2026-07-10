@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
@@ -55,7 +56,9 @@ class AuthCallbacks(
     val verifyEmailOtp: (String, String, () -> Unit, (String) -> Unit) -> Unit,
     val resetPasswordViaEmail: (String, String, String, () -> Unit, (String) -> Unit) -> Unit,
     val hasVerifiedPhone: () -> Boolean,
-    val linkPendingPhone: (() -> Unit, (String) -> Unit) -> Unit
+    val linkPendingPhone: (() -> Unit, (String) -> Unit) -> Unit,
+    val checkEmailAvailable: (String, (Boolean) -> Unit) -> Unit,
+    val checkPhoneAvailable: (String, (Boolean) -> Unit) -> Unit
 )
 
 // Con "Recordar mis datos" tildado, guardamos el correo para que la próxima vez el
@@ -186,6 +189,12 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
     var loading by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
 
+    // AuthManager no tiene Context para traducir su mensaje de "código OTP incorrecto",
+    // así que devuelve un sentinel (ERR_INVALID_OTP) y acá, donde sí hay stringResource,
+    // lo convertimos al mensaje amigable en el idioma correspondiente.
+    val otpWrongCodeMessage = stringResource(R.string.otp_wrong_code)
+    fun mapAuthError(raw: String) = if (raw == AuthManager.ERR_INVALID_OTP) otpWrongCodeMessage else raw
+
     // Teléfono que se está vinculando a una cuenta de Google recién autenticada.
     var googleVerifyPhone by remember { mutableStateOf("") }
 
@@ -217,7 +226,7 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
                 loading = false
                 step = AuthStep.REGISTER_SUCCESS
             }, { e -> loading = false; errorMessage = e })
-        }, { e -> loading = false; errorMessage = e })
+        }, { e -> loading = false; errorMessage = mapAuthError(e) })
     }
 
     fun finishPhoneRecoverySignIn() {
@@ -225,7 +234,7 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
         callbacks.signInWithPendingPhoneCredential({
             loading = false
             step = AuthStep.FORGOT_NEW_PASSWORD
-        }, { e -> loading = false; errorMessage = e })
+        }, { e -> loading = false; errorMessage = mapAuthError(e) })
     }
 
     // El mockup no tiene una pantalla separada para "ingresa tu correo": desde el login
@@ -279,6 +288,8 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
             AuthStep.REGISTER_FORM -> RegisterFormScreen(
                 loading = loading,
                 errorMessage = errorMessage,
+                checkEmailAvailable = callbacks.checkEmailAvailable,
+                checkPhoneAvailable = callbacks.checkPhoneAvailable,
                 onBack = { errorMessage = ""; step = AuthStep.LOGIN },
                 onSubmit = { nombres, apellidos, day, month, year, phone, email, password ->
                     pendingNombres = nombres; pendingApellidos = apellidos
@@ -349,7 +360,7 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
 
             AuthStep.FORGOT_PHONE_OTP -> OtpEntryScreen(
                 title = stringResource(R.string.otp_title_recovery),
-                subtitle = stringResource(R.string.otp_subtitle, recoveryPhoneMasked),
+                subtitle = stringResource(R.string.otp_subtitle_recovery_phone, recoveryPhoneMasked),
                 loading = loading,
                 errorMessage = errorMessage,
                 onBack = { errorMessage = ""; step = AuthStep.FORGOT_CHOOSE_METHOD },
@@ -443,7 +454,7 @@ fun AuthFlow(callbacks: AuthCallbacks, onAuthenticated: () -> Unit) {
                 onConfirm = { code ->
                     loading = true; errorMessage = ""
                     callbacks.confirmPhoneCode(code, {
-                        callbacks.linkPendingPhone({ loading = false; onAuthenticated() }, { e -> loading = false; errorMessage = e })
+                        callbacks.linkPendingPhone({ loading = false; onAuthenticated() }, { e -> loading = false; errorMessage = mapAuthError(e) })
                     }, { e -> loading = false; errorMessage = e })
                 },
                 onResend = { onDone ->
@@ -474,8 +485,6 @@ private fun LoginScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        LanguageToggle()
-        Spacer(modifier = Modifier.height(16.dp))
         Text(
             stringResource(R.string.app_name),
             fontSize = 32.sp,
@@ -782,6 +791,8 @@ private fun OtpDigitBoxes(code: String, onCodeChange: (String) -> Unit, length: 
 private fun RegisterFormScreen(
     loading: Boolean,
     errorMessage: String,
+    checkEmailAvailable: (String, (Boolean) -> Unit) -> Unit,
+    checkPhoneAvailable: (String, (Boolean) -> Unit) -> Unit,
     onBack: () -> Unit,
     onSubmit: (
         nombres: String, apellidos: String, day: Int, month: Int, year: String,
@@ -800,11 +811,13 @@ private fun RegisterFormScreen(
     var acceptedDataPolicy by remember { mutableStateOf(false) }
     var showTermsDialog by remember { mutableStateOf(false) }
     var showDataPolicyDialog by remember { mutableStateOf(false) }
+    var emailTaken by remember { mutableStateOf(false) }
+    var phoneTaken by remember { mutableStateOf(false) }
 
     val months = stringArrayResource(R.array.months)
     val allFilled = nombres.isNotBlank() && apellidos.isNotBlank() && year.trim().length == 4 &&
         phoneNumber.trim().length >= 6 && email.isNotBlank() && password.isNotBlank() &&
-        acceptedTerms && acceptedDataPolicy
+        acceptedTerms && acceptedDataPolicy && !emailTaken && !phoneTaken
 
     if (showTermsDialog) {
         AlertDialog(
@@ -891,22 +904,50 @@ private fun RegisterFormScreen(
             )
             OutlinedTextField(
                 value = phoneNumber,
-                onValueChange = { phoneNumber = it.filter { c -> c.isDigit() }.take(15) },
+                onValueChange = { phoneNumber = it.filter { c -> c.isDigit() }.take(15); phoneTaken = false },
                 label = { Text(stringResource(R.string.phone_number_label)) },
                 singleLine = true,
+                isError = phoneTaken,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).onFocusChanged { focusState ->
+                    val trimmed = phoneNumber.trim()
+                    if (!focusState.isFocused && trimmed.length >= 6) {
+                        checkPhoneAvailable("+51$trimmed") { available -> phoneTaken = !available }
+                    }
+                }
+            )
+        }
+        if (phoneTaken) {
+            Text(
+                stringResource(R.string.error_phone_taken),
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth()
             )
         }
         Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = email,
-            onValueChange = { email = it },
+            onValueChange = { email = it; emailTaken = false },
             label = { Text(stringResource(R.string.label_email)) },
             singleLine = true,
+            isError = emailTaken,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().onFocusChanged { focusState ->
+                val trimmed = email.trim()
+                if (!focusState.isFocused && trimmed.isNotBlank()) {
+                    checkEmailAvailable(trimmed) { available -> emailTaken = !available }
+                }
+            }
         )
+        if (emailTaken) {
+            Text(
+                stringResource(R.string.error_email_taken),
+                color = MaterialTheme.colorScheme.error,
+                fontSize = 12.sp,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
         PasswordField(
             value = password,
