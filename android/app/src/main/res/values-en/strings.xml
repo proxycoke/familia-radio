@@ -79,6 +79,7 @@
     <string name="clip_label_family_code">Family code</string>
 
     <!-- Connection state -->
+    <string name="action_sign_out">Log out</string>
     <string name="status_disconnected">Disconnected</string>
     <string name="role_label_elder">Elder family member</string>
     <string name="role_label_caregiver">Caregiver</string>

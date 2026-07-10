@@ -59,7 +59,7 @@ class AuthCallbacks(
 // Con "Recordar mis datos" tildado, guardamos el correo para que la próxima vez el
 // login ya lo tenga escrito — así "¿Olvidaste tu contraseña?" puede ir directo a
 // elegir el método de recuperación en vez de pedir el correo primero (como el mockup).
-private object RememberedEmailStore {
+object RememberedEmailStore {
     private const val PREFS = "familia_radio_prefs"
     private const val KEY_EMAIL = "remembered_email"
 

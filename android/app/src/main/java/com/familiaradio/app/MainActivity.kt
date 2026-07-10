@@ -14,6 +14,12 @@ import android.os.IBinder
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -515,6 +521,7 @@ private fun FamiliaRadioApp(
     onActivateConnection: (Role) -> Unit,
     onStopConnection: (Role) -> Unit
 ) {
+    val context = LocalContext.current
     var authenticated by remember { mutableStateOf(isAuthenticated()) }
     var membership by remember { mutableStateOf(loadMembership()) }
     var connected by remember { mutableStateOf(false) }
@@ -542,93 +549,109 @@ private fun FamiliaRadioApp(
             alpha = languageTransition.alpha.value
             translationX = languageTransition.offsetX.value
         }) {
-            if (!authenticated) {
-                AuthFlow(
-                    callbacks = authCallbacks,
-                    onAuthenticated = { authenticated = true }
-                )
-                return@Surface
-            }
+            // Antes esto era un corte seco (varios "return@Surface" intercambiando contenido
+            // sin animar). Ahora el paso de login a home (y viceversa, al cerrar sesión) usa
+            // el mismo deslizar+desvanecer que el resto de transiciones de la app.
+            AnimatedContent(
+                targetState = authenticated,
+                transitionSpec = {
+                    (slideInHorizontally(initialOffsetX = { it / 3 }) + fadeIn()) togetherWith
+                        (slideOutHorizontally(targetOffsetX = { -it / 3 }) + fadeOut())
+                },
+                label = "auth-home-transition"
+            ) { isAuthenticated ->
+                if (!isAuthenticated) {
+                    AuthFlow(
+                        callbacks = authCallbacks,
+                        onAuthenticated = { authenticated = true }
+                    )
+                } else {
+                    val currentMembership = membership
 
-            val currentMembership = membership
-
-            if (currentMembership == null) {
-                FamilySetupScreen(
-                    onCreateFamily = createFamily,
-                    onJoinFamily = joinFamily,
-                    onRegistered = { newMembership ->
-                        saveMembership(newMembership)
-                        membership = newMembership
-                    }
-                )
-                return@Surface
-            }
-
-            if (!sessionActive) {
-                IdleScreen(
-                    role = currentMembership.role,
-                    onConnect = {
-                        onActivateConnection(currentMembership.role)
-                        sessionActive = true
-                        retryCount++
-                    },
-                    onForgetFamily = {
-                        onStopConnection(currentMembership.role)
-                        forgetMembership()
-                        membership = null
-                        sessionActive = true
-                        connected = false
-                    }
-                )
-                return@Surface
-            }
-
-            val manager = connectionManager.value
-            val connectingLabel = stringResource(R.string.status_connecting)
-            val micPermissionError = stringResource(R.string.error_mic_permission_required)
-
-            if (!connected) {
-                LaunchedEffect(retryCount, manager) {
-                    if (manager == null) return@LaunchedEffect
-                    statusMessage = connectingLabel
-                    if (hasMicPermission()) {
-                        manager.connect(currentMembership.familyId, {
-                            connected = true
-                            statusMessage = ""
-                            if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
-                        }, { error -> statusMessage = error })
-                    } else {
-                        requestMicPermission { granted ->
-                            if (granted) {
-                                manager.connect(currentMembership.familyId, {
-                                    connected = true
-                                    statusMessage = ""
-                                    if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
-                                }, { error -> statusMessage = error })
-                            } else {
-                                statusMessage = micPermissionError
+                    if (currentMembership == null) {
+                        FamilySetupScreen(
+                            onCreateFamily = createFamily,
+                            onJoinFamily = joinFamily,
+                            onRegistered = { newMembership ->
+                                saveMembership(newMembership)
+                                membership = newMembership
                             }
+                        )
+                    } else if (!sessionActive) {
+                        IdleScreen(
+                            role = currentMembership.role,
+                            onConnect = {
+                                onActivateConnection(currentMembership.role)
+                                sessionActive = true
+                                retryCount++
+                            },
+                            onForgetFamily = {
+                                onStopConnection(currentMembership.role)
+                                forgetMembership()
+                                membership = null
+                                sessionActive = true
+                                connected = false
+                            },
+                            onSignOut = {
+                                onStopConnection(currentMembership.role)
+                                authCallbacks.signOut()
+                                RememberedEmailStore.clear(context)
+                                forgetMembership()
+                                membership = null
+                                sessionActive = true
+                                connected = false
+                                authenticated = false
+                            }
+                        )
+                    } else {
+                        val manager = connectionManager.value
+                        val connectingLabel = stringResource(R.string.status_connecting)
+                        val micPermissionError = stringResource(R.string.error_mic_permission_required)
+
+                        if (!connected) {
+                            LaunchedEffect(retryCount, manager) {
+                                if (manager == null) return@LaunchedEffect
+                                statusMessage = connectingLabel
+                                if (hasMicPermission()) {
+                                    manager.connect(currentMembership.familyId, {
+                                        connected = true
+                                        statusMessage = ""
+                                        if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
+                                    }, { error -> statusMessage = error })
+                                } else {
+                                    requestMicPermission { granted ->
+                                        if (granted) {
+                                            manager.connect(currentMembership.familyId, {
+                                                connected = true
+                                                statusMessage = ""
+                                                if (currentMembership.role == Role.ABUELA) manager.forceMaxVolume()
+                                            }, { error -> statusMessage = error })
+                                        } else {
+                                            statusMessage = micPermissionError
+                                        }
+                                    }
+                                }
+                            }
+                            ConnectingScreen(
+                                role = currentMembership.role,
+                                statusMessage = statusMessage,
+                                onRetry = { retryCount++ }
+                            )
+                        } else {
+                            PushToTalkScreen(
+                                role = currentMembership.role,
+                                onMicMuted = { muted -> manager?.setMicMuted(muted) },
+                                isReconnecting = manager?.reconnecting?.value ?: false,
+                                onExit = {
+                                    onStopConnection(currentMembership.role)
+                                    connected = false
+                                    sessionActive = false
+                                }
+                            )
                         }
                     }
                 }
-                ConnectingScreen(
-                    role = currentMembership.role,
-                    statusMessage = statusMessage,
-                    onRetry = { retryCount++ }
-                )
-                return@Surface
             }
-
-            PushToTalkScreen(
-                role = currentMembership.role,
-                onMicMuted = { muted -> manager?.setMicMuted(muted) },
-                isReconnecting = manager?.reconnecting?.value ?: false,
-                onExit = {
-                    onStopConnection(currentMembership.role)
-                    connected = false
-                    sessionActive = false
-                }
-            )
         }
         if (languageTransition.showLoader) {
             Box(
@@ -840,32 +863,43 @@ private fun InviteCodeBadge(code: String) {
 private fun IdleScreen(
     role: Role,
     onConnect: () -> Unit,
-    onForgetFamily: () -> Unit
+    onForgetFamily: () -> Unit,
+    onSignOut: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        LanguageToggle()
-        Spacer(modifier = Modifier.height(8.dp))
-        Text("📻", fontSize = 48.sp)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(stringResource(R.string.status_disconnected), fontSize = 24.sp, fontWeight = FontWeight.Bold)
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            if (role == Role.ABUELA) stringResource(R.string.role_label_elder) else stringResource(R.string.role_label_caregiver),
-            fontSize = 14.sp,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.height(24.dp))
-        Button(
-            onClick = onConnect,
-            shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth().height(64.dp)
-        ) { Text(stringResource(R.string.action_connect), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
-        Spacer(modifier = Modifier.height(24.dp))
-        TextButton(onClick = onForgetFamily) { Text(stringResource(R.string.action_change_family)) }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            LanguageToggle()
+            Spacer(modifier = Modifier.height(8.dp))
+            Text("📻", fontSize = 48.sp)
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(stringResource(R.string.status_disconnected), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                if (role == Role.ABUELA) stringResource(R.string.role_label_elder) else stringResource(R.string.role_label_caregiver),
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onConnect,
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) { Text(stringResource(R.string.action_connect), fontSize = 18.sp, fontWeight = FontWeight.Bold) }
+            Spacer(modifier = Modifier.height(24.dp))
+            TextButton(onClick = onForgetFamily) { Text(stringResource(R.string.action_change_family)) }
+        }
+        // Provisorio: por ahora el único lugar para cerrar sesión es acá abajo, en la
+        // pantalla de reposo. Limpia todo (Firebase + membresía + correo recordado).
+        TextButton(
+            onClick = onSignOut,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)
+        ) {
+            Text(stringResource(R.string.action_sign_out), color = MaterialTheme.colorScheme.error)
+        }
     }
 }
 

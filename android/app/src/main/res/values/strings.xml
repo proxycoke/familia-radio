@@ -84,6 +84,7 @@
     <string name="role_label_caregiver">Cuidador</string>
     <string name="action_connect">Conectar</string>
     <string name="action_change_family">Cambiar de familia</string>
+    <string name="action_sign_out">Cerrar sesión</string>
     <string name="status_connecting">Conectando…</string>
     <string name="status_connecting_radio">Conectando al radio familiar…</string>
     <string name="action_retry">Reintentar</string>
