@@ -1,11 +1,4 @@
-const { initializeApp } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
-
-// Solo necesitamos verificar tokens (no crear usuarios ni nada admin), así que
-// alcanza con inicializar con el projectId — no hace falta una service account
-// key, lo que evita tener que guardar ese secreto en Render.
-const app = initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
-const auth = getAuth(app);
+const { auth } = require('./firebaseAdmin');
 
 // Exige un ID token válido de Firebase (número de teléfono verificado por SMS)
 // en el header Authorization. La identidad real del usuario pasa a ser

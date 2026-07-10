@@ -37,6 +37,19 @@ async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_reset_codes (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      code TEXT NOT NULL,
+      used BOOLEAN NOT NULL DEFAULT false,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_password_reset_codes_email ON password_reset_codes(email);
+  `);
 }
 
 function channelNameForFamily(familyId) {
@@ -130,6 +143,27 @@ async function upsertUserProfile({ phoneNumber, nombres, apellidos, fechaNacimie
   return result.rows[0];
 }
 
+async function createPasswordResetCode({ email, code, expiresAt }) {
+  await pool.query(
+    `INSERT INTO password_reset_codes (email, code, expires_at) VALUES ($1, $2, $3)`,
+    [email.toLowerCase(), code, expiresAt]
+  );
+}
+
+async function findValidResetCode(email, code) {
+  const result = await pool.query(
+    `SELECT * FROM password_reset_codes
+     WHERE email = $1 AND code = $2 AND used = false AND expires_at > now()
+     ORDER BY created_at DESC LIMIT 1`,
+    [email.toLowerCase(), code]
+  );
+  return result.rows[0] || null;
+}
+
+async function markResetCodeUsed(id) {
+  await pool.query(`UPDATE password_reset_codes SET used = true WHERE id = $1`, [id]);
+}
+
 module.exports = {
   pool,
   initSchema,
@@ -141,5 +175,8 @@ module.exports = {
   getMemberCounts,
   findExistingMember,
   insertMember,
-  upsertUserProfile
+  upsertUserProfile,
+  createPasswordResetCode,
+  findValidResetCode,
+  markResetCodeUsed
 };
