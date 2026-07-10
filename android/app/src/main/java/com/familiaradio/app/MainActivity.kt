@@ -575,6 +575,11 @@ private fun FamiliaRadioApp(
                             onRegistered = { newMembership ->
                                 saveMembership(newMembership)
                                 membership = newMembership
+                            },
+                            onSignOut = {
+                                authCallbacks.signOut()
+                                RememberedEmailStore.clear(context)
+                                authenticated = false
                             }
                         )
                     } else if (!sessionActive) {
@@ -672,7 +677,8 @@ private enum class SetupStep { CHOOSE, CREATE_ROLE, SHOW_CODE, JOIN_CODE, JOIN_R
 private fun FamilySetupScreen(
     onCreateFamily: (Role, (Membership) -> Unit, (String) -> Unit) -> Unit,
     onJoinFamily: (String, Role, (Membership) -> Unit, (String) -> Unit) -> Unit,
-    onRegistered: (Membership) -> Unit
+    onRegistered: (Membership) -> Unit,
+    onSignOut: () -> Unit
 ) {
     var step by remember { mutableStateOf(SetupStep.CHOOSE) }
     var loading by remember { mutableStateOf(false) }
@@ -680,6 +686,7 @@ private fun FamilySetupScreen(
     var codeInput by remember { mutableStateOf("") }
     var pendingMembership by remember { mutableStateOf<Membership?>(null) }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier.fillMaxSize().padding(28.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -687,8 +694,6 @@ private fun FamilySetupScreen(
     ) {
         when (step) {
             SetupStep.CHOOSE -> {
-                LanguageToggle()
-                Spacer(modifier = Modifier.height(8.dp))
                 Text("📻", fontSize = 56.sp)
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
@@ -817,6 +822,17 @@ private fun FamilySetupScreen(
             }
         }
     }
+    // Provisorio: "home" mientras no hay una pantalla de ajustes — Cerrar sesión solo
+    // aparece en el primer paso (CHOOSE), no en medio de crear/unirse a una familia.
+    if (step == SetupStep.CHOOSE) {
+        TextButton(
+            onClick = onSignOut,
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)
+        ) {
+            Text(stringResource(R.string.action_sign_out), color = MaterialTheme.colorScheme.error)
+        }
+    }
+    }
 }
 
 @Composable
@@ -872,8 +888,6 @@ private fun IdleScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            LanguageToggle()
-            Spacer(modifier = Modifier.height(8.dp))
             Text("📻", fontSize = 48.sp)
             Spacer(modifier = Modifier.height(16.dp))
             Text(stringResource(R.string.status_disconnected), fontSize = 24.sp, fontWeight = FontWeight.Bold)
