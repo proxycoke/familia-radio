@@ -1,5 +1,6 @@
 package com.familiaradio.app
 
+import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,6 +17,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringArrayResource
@@ -53,6 +55,25 @@ class AuthCallbacks(
     val verifyEmailOtp: (String, String, () -> Unit, (String) -> Unit) -> Unit,
     val resetPasswordViaEmail: (String, String, String, () -> Unit, (String) -> Unit) -> Unit
 )
+
+// Con "Recordar mis datos" tildado, guardamos el correo para que la próxima vez el
+// login ya lo tenga escrito — así "¿Olvidaste tu contraseña?" puede ir directo a
+// elegir el método de recuperación en vez de pedir el correo primero (como el mockup).
+private object RememberedEmailStore {
+    private const val PREFS = "familia_radio_prefs"
+    private const val KEY_EMAIL = "remembered_email"
+
+    fun load(context: Context): String? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_EMAIL, null)
+
+    fun save(context: Context, email: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_EMAIL, email).apply()
+    }
+
+    fun clear(context: Context) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_EMAIL).apply()
+    }
+}
 
 @Composable
 fun BackButton(onBack: () -> Unit) {
@@ -388,9 +409,11 @@ private fun LoginScreen(
     onRegister: () -> Unit,
     onForgotPassword: (String) -> Unit
 ) {
-    var email by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val remembered = remember { RememberedEmailStore.load(context) }
+    var email by remember { mutableStateOf(remembered ?: "") }
     var password by remember { mutableStateOf("") }
-    var rememberMe by remember { mutableStateOf(false) }
+    var rememberMe by remember { mutableStateOf(remembered != null) }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(28.dp),
@@ -430,13 +453,19 @@ private fun LoginScreen(
             Text(stringResource(R.string.login_remember_me), fontSize = 13.sp)
         }
         Button(
-            onClick = { onLogin(email.trim(), password) },
+            onClick = {
+                if (rememberMe) RememberedEmailStore.save(context, email.trim()) else RememberedEmailStore.clear(context)
+                onLogin(email.trim(), password)
+            },
             enabled = !loading && email.isNotBlank() && password.isNotBlank(),
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) { Text(stringResource(R.string.action_login), fontSize = 17.sp, fontWeight = FontWeight.Bold) }
         Spacer(modifier = Modifier.height(8.dp))
-        TextButton(onClick = { onForgotPassword(email.trim()) }) {
+        TextButton(onClick = {
+            if (rememberMe && email.isNotBlank()) RememberedEmailStore.save(context, email.trim())
+            onForgotPassword(email.trim())
+        }) {
             Text(stringResource(R.string.login_forgot_password), fontSize = 13.sp)
         }
 
